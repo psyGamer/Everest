@@ -615,33 +615,15 @@ namespace Celeste.Mod {
 
         [MonoModReplace]
         private Entity CreateKeyboardConfigUI(TextMenu menu) {
-            bool oldAllowHudHide = true;
-            if (Engine.Scene is Level level) {
-                oldAllowHudHide = level.AllowHudHide;
-                level.AllowHudHide = false;
-            }
             return new ModuleSettingsKeyboardConfigUI(this) {
-                OnClose = () => {
-                    menu.Focused = true;
-                    if (Engine.Scene is Level level)
-                        level.AllowHudHide = oldAllowHudHide;
-                }
+                OnClose = () => menu.Focused = true
             };
         }
 
         [MonoModReplace]
         private Entity CreateButtonConfigUI(TextMenu menu) {
-            bool oldAllowHudHide = true;
-            if (Engine.Scene is Level level) {
-                oldAllowHudHide = level.AllowHudHide;
-                level.AllowHudHide = false;
-            }
             return new ModuleSettingsButtonConfigUI(this) {
-                OnClose = () => {
-                    menu.Focused = true;
-                    if (Engine.Scene is Level level)
-                        level.AllowHudHide = oldAllowHudHide;
-                }
+                OnClose = () => menu.Focused = true
             };
         }
 
