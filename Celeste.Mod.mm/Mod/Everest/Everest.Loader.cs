@@ -237,7 +237,7 @@ namespace Celeste.Mod {
                         LoadDir(e.FullPath);
                     else if (e.FullPath.EndsWith(".zip"))
                         LoadZip(e.FullPath);
-                    ((patch_OuiMainMenu) (AssetReloadHelper.ReturnToScene as Overworld)?.GetUI<OuiMainMenu>())?.RebuildMainAndTitle();
+                    ((patch_OuiMainMenu) (AssetReloadHelper.ReturnToScene as Overworld)?.GetUI<OuiMainMenu>())?.NeedsRebuild();
                 })));
             }
 
