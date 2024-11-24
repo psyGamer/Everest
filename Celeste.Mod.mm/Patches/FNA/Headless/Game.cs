@@ -40,6 +40,13 @@ namespace MonoMod {
             TypeDefinition t_HeadlessWindow = MonoModRule.Modder.FindType("Microsoft.Xna.Framework.HeadlessWindow").Resolve();
             MethodReference m_HeadlessWindow_ctor = MonoModRule.Modder.Module.ImportReference(t_HeadlessWindow.FindMethod(".ctor"));
 
+            TypeDefinition t_Flags = MonoModRule.Modder.Module.GetType("Celeste.Mod.Everest/Flags");
+            MethodReference m_Flags_setIsHeadless = MonoModRule.Modder.Module.ImportReference(t_Flags.FindProperty("IsHeadless")!.GetMethod);
+
+            // Insert 'Everest.Flags.IsHeadless = true'
+            cursor.EmitLdcI4(1 /* true */);
+            cursor.EmitCall(m_Flags_setIsHeadless);
+
             // Replace 'FNAPlatform.CreateWindow()' with 'new HeadlessWindow()'
             cursor.GotoNext(instr => instr.MatchLdsfld("Microsoft.Xna.Framework.FNAPlatform", "CreateWindow"));
             cursor.RemoveRange(2);
