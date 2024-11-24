@@ -15,6 +15,7 @@ using System.Threading;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
+using MonoMod.InlineRT;
 using MonoMod.Utils;
 using System.Text.RegularExpressions;
 using System.Text;
@@ -28,7 +29,7 @@ namespace Celeste {
         // We're effectively in Celeste, but still need to "expose" private fields to our mod.
         private bool firstLoad;
 
-        
+
 
         [PatchCelesteMain]
         public static extern void orig_Main(string[] args);
@@ -393,6 +394,14 @@ namespace MonoMod {
 
         public static void PatchCelesteMain(ILContext context, CustomAttribute attrib) {
             ILCursor cursor = new ILCursor(context);
+
+            TypeDefinition t_Flags = MonoModRule.Modder.Module.GetType("Celeste.Mod.Everest/Flags");
+            MethodReference m_Flags_setIsHeadless = MonoModRule.Modder.Module.ImportReference(t_Flags.FindProperty("IsHeadless")!.SetMethod);
+
+            // Insert 'Everest.Flags.IsHeadless = <true/false>'
+            cursor.EmitLdcI4(MonoModRule.Flag.Get("Headless") ? 1 : 0);
+            cursor.EmitCall(m_Flags_setIsHeadless);
+
             // TryGotoNext used because SDL_GetPlatform does not exist on XNA
             if (cursor.TryGotoNext(instr => instr.MatchCall("SDL2.SDL", "SDL_GetPlatform"))) {
                 cursor.Next.OpCode = OpCodes.Ldstr;

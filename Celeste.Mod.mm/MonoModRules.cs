@@ -102,6 +102,9 @@ namespace MonoMod {
             if (MonoModder.Version < monoModderAsmRef.Version)
                 throw new Exception($"Unexpected version of MonoMod patcher: {MonoModder.Version} (expected {monoModderAsmRef.Version}+)");
 
+            // Data is set by MiniInstaller
+            MonoModRule.Flag.Set("Headless", (bool?)AppDomain.CurrentDomain.GetData("Everest_IsHeadless") ?? false);
+
             // Add common post processor
             modder.PostProcessors += CommonPostProcessor;
         }

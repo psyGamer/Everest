@@ -7,6 +7,9 @@ using System.Runtime.InteropServices;
 namespace MiniInstaller {
     public static partial class Program {
         public static int Main(string[] args) {
+            // Forward to MonoModRules
+            AppDomain.CurrentDomain.SetData("Everest_IsHeadless", args.Contains("headless"));
+
             if (args.Length == 0) return StandardMode(args);
             if (args[0] == "--fastmode") return FastMode(args);
             return StandardMode(args);
@@ -20,13 +23,13 @@ namespace MiniInstaller {
 
             // Set working directory
             Directory.SetCurrentDirectory(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!);
-            
+
             if (!Globals.SetupPaths()) {
                 // setting up paths failed (Celeste.exe was not found).
                 return false;
             }
-            
-            
+
+
             Globals.DetermineInstallPlatform();
 
             // .NET hates it when strong-named dependencies get updated.
@@ -123,7 +126,7 @@ namespace MiniInstaller {
 
             return 0;
         }
-        
+
         /// <summary>
         /// Fast mode serves as a way to speed up development environments,
         /// allowing disabling most parts of the installation process to only focus on the ones
@@ -135,6 +138,7 @@ namespace MiniInstaller {
         /// "hookgen": Runs MonoMod.HookGen with the present dll, then runs MonoMod.Patcher on it to relink the HEM
         /// "apphost": Only if "maingame" is also present, forces the regeneration of an apphost and runtime config files
         /// "xmldoc": Only if "xmldoc" is also present, combines xmldocs
+        /// "headless": Enables headless mode, for usage inside CIs
         /// </summary>
         public static int FastMode(string[] args) {
             bool doMainGame = false;
@@ -177,10 +181,10 @@ namespace MiniInstaller {
                 string[] mods = new string[] { Globals.PathEverestLib, everestModDLL };
 
                 string coreGameCacheFile = Path.ChangeExtension(Globals.PathCelesteExe, ".CoreGameCache.dll");
-                
+
                 if (doMainGame && !File.Exists(coreGameCacheFile))
                     coreGameCacheRegen = true;
-                
+
                 if (coreGameCacheRegen && File.Exists(coreGameCacheFile))
                     File.Delete(coreGameCacheFile);
 

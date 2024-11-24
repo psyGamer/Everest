@@ -91,8 +91,6 @@ namespace MonoMod {
             MonoModRule.Flag.Set("Steamworks", isSteamworks);
             MonoModRule.Flag.Set("NoLauncher", !isSteamworks);
 
-            MonoModRule.Flag.Set("Headless", true);
-
             MonoModRule.Flag.Set("Has:BirdTutorialGuiButtonPromptEnum", MonoModRule.Modder.FindType("Celeste.BirdTutorialGui/ButtonPrompt")?.SafeResolve() != null);
 
             // Run game preprocessor
