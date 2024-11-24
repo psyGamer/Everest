@@ -1,0 +1,460 @@
+commit 93c93c5115a5a3171d75fa47fab5ccccdde2c852
+Author: psyGamer <psygamer21@gmail.com>
+Date:   Sun Nov 24 17:03:27 2024 +0100
+
+    Add minimal headless shader parsing backend
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 4e87e32..76d72b7 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -176,6 +176,7 @@ ADD_LIBRARY(mojoshader
+     mojoshader_d3d11.c
+     mojoshader_vulkan.c
+     mojoshader_sdlgpu.c
++    mojoshader_headless.c
+     profiles/mojoshader_profile_arb1.c
+     profiles/mojoshader_profile_bytecode.c
+     profiles/mojoshader_profile_d3d.c
+diff --git a/mojoshader.h b/mojoshader.h
+index 930c28f..9d930e8 100644
+--- a/mojoshader.h
++++ b/mojoshader.h
+@@ -4351,6 +4351,74 @@ DECLSPEC void MOJOSHADER_sdlGetShaders(MOJOSHADER_sdlContext *ctx,
+ DECLSPEC unsigned int MOJOSHADER_sdlGetSamplerSlots(MOJOSHADER_sdlShaderData *shader);
+ 
+ 
++/* Headless interface... */
++
++typedef struct MOJOSHADER_headlessContext MOJOSHADER_headlessContext;
++typedef struct MOJOSHADER_headlessShaderData MOJOSHADER_headlessShaderData;
++
++/*
++ * Prepares a context to manage headless shaders.
++ *
++ * You do not need to call this if all you want is MOJOSHADER_parse().
++ *
++ * As MojoShader requires some memory to be allocated, you may provide a
++ *  custom allocator to this function, which will be used to allocate/free
++ *  memory. They function just like malloc() and free(). We do not use
++ *  realloc(). If you don't care, pass NULL in for the allocator functions.
++ *  If your allocator needs instance-specific data, you may supply it with the
++ *  (malloc_d) parameter. This pointer is passed as-is to your (m) and (f)
++ *  functions.
++ *
++ * Returns a new context on success, NULL on error.
++ */
++DECLSPEC MOJOSHADER_headlessContext *MOJOSHADER_headlessCreateContext(MOJOSHADER_malloc m,
++																 MOJOSHADER_free f,
++																 void *malloc_d);
++
++/*
++ * Deinitialize MojoShader's headless shader management.
++ *
++ * This will clean up resources previously allocated.
++ *
++ * This will not clean up shaders and programs you created! Please call
++ *  MOJOSHADER_headlessDeleteShader() and MOJOSHADER_headlessDeleteProgram() to clean
++ *  those up before calling this function!
++ *
++ * This function destroys the MOJOSHADER_headlessContext you pass it.
++ */
++DECLSPEC void MOJOSHADER_headlessDestroyContext(MOJOSHADER_headlessContext *ctx);
++
++/*
++ * Compile a buffer of Direct3D shader bytecode into an headless shader module.
++ *
++ *   (tokenbuf) is a buffer of Direct3D shader bytecode.
++ *   (bufsize) is the size, in bytes, of the bytecode buffer.
++ *   (swiz), (swizcount), (smap), and (smapcount) are passed to
++ *   MOJOSHADER_parse() unmolested.
++ *
++ * Returns NULL on error, or a shader handle on success.
++ *
++ * Compiled shaders from this function may not be shared between contexts.
++ */
++DECLSPEC MOJOSHADER_headlessShaderData *MOJOSHADER_headlessCompileShader(MOJOSHADER_headlessContext *ctx,
++														   				 const char *mainfn,
++														   				 const unsigned char *tokenbuf,
++														   				 const unsigned int bufsize,
++														   				 const MOJOSHADER_swizzle *swiz,
++														   				 const unsigned int swizcount,
++														   				 const MOJOSHADER_samplerMap *smap,
++														   				 const unsigned int smapcount);
++
++/*
++ * Get the MOJOSHADER_parseData structure that was produced from the
++ *  call to MOJOSHADER_headlessCompileShader().
++ *
++ * This data is read-only, and you should NOT attempt to free it. This
++ *  pointer remains valid until the shader is deleted.
++ */
++DECLSPEC const MOJOSHADER_parseData *MOJOSHADER_headlessGetShaderParseData(MOJOSHADER_headlessShaderData *shader);
++
++
+ /* Effects interface... */
+ #include "mojoshader_effects.h"
+ 
+diff --git a/mojoshader_effects.c b/mojoshader_effects.c
+index 1b24fd3..b6fd9d5 100644
+--- a/mojoshader_effects.c
++++ b/mojoshader_effects.c
+@@ -1075,6 +1075,137 @@ parseEffect_outOfMemory:
+     return &MOJOSHADER_out_of_mem_effect;
+ } // MOJOSHADER_parseEffect
+ 
++MOJOSHADER_effect *MOJOSHADER_compileEffectMeta(const unsigned char *buf,
++                                                const unsigned int _len,
++                                                const MOJOSHADER_swizzle *swiz,
++                                                const unsigned int swizcount,
++                                                const MOJOSHADER_samplerMap *smap,
++                                                const unsigned int smapcount,
++                                                const MOJOSHADER_effectShaderContext *ctx)
++{
++    const uint8 *ptr = (const uint8 *) buf;
++    uint32 len = (uint32) _len;
++    ErrorList *errors;
++    MOJOSHADER_malloc m;
++    MOJOSHADER_free f;
++    void *d;
++
++    /* Need a backend! */
++    if (ctx == NULL)
++        return &MOJOSHADER_need_a_backend_effect;
++
++    /* Supply both m and f, or neither */
++    if ( ((ctx->m == NULL) && (ctx->f != NULL))
++      || ((ctx->m != NULL) && (ctx->f == NULL)) )
++        return &MOJOSHADER_out_of_mem_effect;
++
++    /* Use default malloc/free if m/f were not passed */
++    if (ctx->m == NULL)
++        m = MOJOSHADER_internal_malloc;
++    else
++        m = ctx->m;
++    if (ctx->f == NULL)
++        f = MOJOSHADER_internal_free;
++    else
++        f = ctx->f;
++    d = ctx->malloc_data;
++
++    /* malloc base effect structure */
++    MOJOSHADER_effect *retval = (MOJOSHADER_effect *) m(sizeof (MOJOSHADER_effect),
++                                                        ctx->malloc_data);
++    if (retval == NULL)
++        return &MOJOSHADER_out_of_mem_effect;
++    memset(retval, '\0', sizeof (*retval));
++
++    /* Store ctx in effect structure */
++    memcpy(&retval->ctx, ctx, sizeof(MOJOSHADER_effectShaderContext));
++    retval->ctx.m = m;
++    retval->ctx.f = f;
++
++    if (len < 8)
++        goto parseEffect_unexpectedEOF;
++
++    /* Read in header magic, seek to initial offset */
++    const uint8 *base = NULL;
++    uint16 magic;
++    uint8 version_major;
++    uint8 version_minor;
++    read_version_token(&ptr, &len, &magic, &version_major, &version_minor);
++    if ((magic == 0xBCF0) && (version_major == 0x0B) && (version_minor == 0xCF))
++    {
++        /* The Effect compiler provided with XNA4 adds some extra mess at the
++         * beginning of the file. It's useless though, so just skip it.
++         * -flibit
++         */
++        const uint32 skip = readui32(&ptr, &len) - 8;
++        ptr += skip;
++        len += skip;
++        read_version_token(&ptr, &len, &magic, &version_major, &version_minor);
++    } // if
++    if (!((magic == 0xFEFF) && (version_major == 0x09) && (version_minor == 0x01)))
++    {
++        MOJOSHADER_deleteEffect(retval);
++        return &MOJOSHADER_not_an_effect_effect;
++    } // if
++    else
++    {
++        const uint32 offset = readui32(&ptr, &len);
++        base = ptr;
++        if (offset > len)
++            goto parseEffect_unexpectedEOF;
++        ptr += offset;
++        len -= offset;
++    } // else
++
++    if (len < 16)
++        goto parseEffect_unexpectedEOF;
++
++    /* Parse structure counts */
++    const uint32 numparams = readui32(&ptr, &len);
++    const uint32 numtechniques = readui32(&ptr, &len);
++    /*const uint32 FIXME =*/ readui32(&ptr, &len);
++    const uint32 numobjects = readui32(&ptr, &len);
++
++    /* Alloc structures now, so object types can be stored */
++    retval->object_count = numobjects;
++    const uint32 siz = sizeof (MOJOSHADER_effectObject) * numobjects;
++    retval->objects = (MOJOSHADER_effectObject *) m(siz, d);
++    if (retval->objects == NULL)
++        goto parseEffect_outOfMemory;
++    memset(retval->objects, '\0', siz);
++
++    /* Parse effect parameters */
++    retval->param_count = numparams;
++    readparameters(numparams, base, &ptr, &len,
++                   &retval->params, retval->objects,
++                   m, d);
++
++    /* Parse effect techniques */
++    retval->technique_count = numtechniques;
++    readtechniques(numtechniques, base, &ptr, &len,
++                   &retval->techniques, retval->objects,
++                   m, d);
++
++    /* Initial effect technique/pass */
++    retval->current_technique = &retval->techniques[0];
++    retval->current_pass = -1;
++
++
++    if (len < 8)
++        goto parseEffect_unexpectedEOF;
++
++	retval->error_count = 0;
++	retval->object_count = 0;
++
++    return retval;
++
++parseEffect_unexpectedEOF:
++    MOJOSHADER_deleteEffect(retval);
++    return &MOJOSHADER_unexpected_eof_effect;
++parseEffect_outOfMemory:
++    MOJOSHADER_deleteEffect(retval);
++    return &MOJOSHADER_out_of_mem_effect;
++} // MOJOSHADER_parseEffectMeta
+ 
+ void freetypeinfo(MOJOSHADER_symbolTypeInfo *typeinfo,
+                   MOJOSHADER_free f, void *d)
+diff --git a/mojoshader_effects.h b/mojoshader_effects.h
+index 48d9a4e..9ede0e8 100644
+--- a/mojoshader_effects.h
++++ b/mojoshader_effects.h
+@@ -676,6 +676,29 @@ DECLSPEC MOJOSHADER_effect *MOJOSHADER_compileEffect(const unsigned char *tokenb
+                                                      const unsigned int smapcount,
+                                                      const MOJOSHADER_effectShaderContext *ctx);
+ 
++/* Resolves metadata information such as parameters / techniques within the effect.
++ * Intended to be used for headless operations.
++ *
++ *   (tokenbuf) is a buffer of Direct3D shader bytecode.
++ *   (bufsize) is the size, in bytes, of the bytecode buffer.
++ *   (swiz), (swizcount), (smap), and (smapcount) are passed to
++ *   MOJOSHADER_parse() unmolested.
++ *   (ctx) contains all the function pointers needed to create and bind shaders
++ *   for a specific backend (OpenGL, Metal, etc).
++ *
++ * This function returns a MOJOSHADER_effect*, containing effect data which
++ *  includes shaders usable with the provided backend.
++ *
++ * This call is only as thread safe as the backend functions!
++ */
++DECLSPEC MOJOSHADER_effect *MOJOSHADER_compileEffectMeta(const unsigned char *tokenbuf,
++													     const unsigned int bufsize,
++													     const MOJOSHADER_swizzle *swiz,
++													     const unsigned int swizcount,
++													     const MOJOSHADER_samplerMap *smap,
++													     const unsigned int smapcount,
++													     const MOJOSHADER_effectShaderContext *ctx);
++
+ /* Delete the shaders that were allocated for an effect.
+  *
+  * (effect) is a MOJOSHADER_effect* obtained from MOJOSHADER_compileEffect().
+diff --git a/mojoshader_headless.c b/mojoshader_headless.c
+new file mode 100644
+index 0000000..d34b460
+--- /dev/null
++++ b/mojoshader_headless.c
+@@ -0,0 +1,164 @@
++/**
++* MojoShader; generate shader programs from bytecode of compiled
++ *  Direct3D shaders.
++ *
++ * Please see the file LICENSE.txt in the source's root directory.
++ */
++
++#define __MOJOSHADER_INTERNAL__ 1
++#include "mojoshader_internal.h"
++
++struct MOJOSHADER_headlessContext
++{
++	const char* profile;
++
++	MOJOSHADER_malloc malloc_fn;
++	MOJOSHADER_free free_fn;
++	void *malloc_data;
++};
++
++struct MOJOSHADER_headlessShaderData
++{
++	const MOJOSHADER_parseData *parseData;
++	uint16_t tag;
++	uint32_t refcount;
++	uint32_t samplerSlots;
++	int32_t uniformBufferSize;
++};
++
++/* Error state... */
++
++static char error_buffer[1024] = { '\0' };
++
++static void set_error(const char *str)
++{
++	snprintf(error_buffer, sizeof (error_buffer), "%s", str);
++} // set_error
++
++static inline void out_of_memory(void)
++{
++	set_error("out of memory");
++} // out_of_memory
++
++/* Internals */
++
++/* Public API */
++
++MOJOSHADER_headlessContext *MOJOSHADER_headlessCreateContext(
++	MOJOSHADER_malloc m,
++	MOJOSHADER_free f,
++	void *malloc_d
++) {
++	MOJOSHADER_headlessContext* resultCtx;
++
++	if (m == NULL) m = MOJOSHADER_internal_malloc;
++	if (f == NULL) f = MOJOSHADER_internal_free;
++
++	resultCtx = (MOJOSHADER_headlessContext*) m(sizeof(MOJOSHADER_headlessContext), malloc_d);
++	if (resultCtx == NULL)
++	{
++		out_of_memory();
++		goto init_fail;
++	} // if
++
++	memset(resultCtx, '\0', sizeof(MOJOSHADER_headlessContext));
++
++#ifdef __APPLE__
++	resultCtx->profile = "metal";
++#else
++	resultCtx->profile = "spirv";
++#endif
++
++	resultCtx->malloc_fn = m;
++	resultCtx->free_fn = f;
++	resultCtx->malloc_data = malloc_d;
++
++	return resultCtx;
++
++	init_fail:
++		if (resultCtx != NULL)
++			f(resultCtx, malloc_d);
++	return NULL;
++} // MOJOSHADER_headlessCreateContext
++
++void MOJOSHADER_headlessDestroyContext(
++	MOJOSHADER_headlessContext *ctx
++) {
++	ctx->free_fn(ctx, ctx->malloc_data);
++} // MOJOSHADER_sdlDestroyContext
++
++static uint16_t shaderTagCounter = 1;
++
++MOJOSHADER_headlessShaderData *MOJOSHADER_headlessCompileShader(
++	MOJOSHADER_headlessContext *ctx,
++	const char *mainfn,
++	const unsigned char *tokenbuf,
++	const unsigned int bufsize,
++	const MOJOSHADER_swizzle *swiz,
++	const unsigned int swizcount,
++	const MOJOSHADER_samplerMap *smap,
++	const unsigned int smapcount
++) {
++	MOJOSHADER_headlessShaderData *shader = NULL;
++	int maxSamplerIndex = 0;
++	int i;
++
++	const MOJOSHADER_parseData *pd = MOJOSHADER_parse(
++		ctx->profile, mainfn,
++		tokenbuf, bufsize,
++		swiz, swizcount,
++		smap, smapcount,
++		ctx->malloc_fn,
++		ctx->free_fn,
++		ctx->malloc_data
++	);
++
++	if (pd->error_count > 0)
++	{
++		set_error(pd->errors[0].error);
++		goto parse_shader_fail;
++	} // if
++
++	shader = (MOJOSHADER_headlessShaderData*) ctx->malloc_fn(sizeof(MOJOSHADER_headlessShaderData), ctx->malloc_data);
++	if (shader == NULL)
++	{
++		out_of_memory();
++		goto parse_shader_fail;
++	} // if
++
++	shader->parseData = pd;
++	shader->refcount = 1;
++	shader->tag = shaderTagCounter++;
++
++	/* XNA allows empty shader slots in the middle, so we have to find the actual max binding index */
++	for (i = 0; i < pd->sampler_count; i += 1)
++	{
++		if (pd->samplers[i].index > maxSamplerIndex)
++		{
++			maxSamplerIndex = pd->samplers[i].index;
++		}
++	}
++
++	shader->samplerSlots = (uint32_t) maxSamplerIndex + 1;
++
++	shader->uniformBufferSize = 0;
++	for (i = 0; i < pd->uniform_count; i++)
++	{
++		shader->uniformBufferSize += Max(pd->uniforms[i].array_count, 1);
++	} // for
++	shader->uniformBufferSize *= 16; // Yes, even the bool registers are this size
++
++	return shader;
++
++	parse_shader_fail:
++		MOJOSHADER_freeParseData(pd);
++	if (shader != NULL)
++		ctx->free_fn(shader, ctx->malloc_data);
++	return NULL;
++} // MOJOSHADER_headlessCompileShader
++
++const MOJOSHADER_parseData *MOJOSHADER_headlessGetShaderParseData(
++	MOJOSHADER_headlessShaderData *shader
++) {
++	return (shader != NULL) ? shader->parseData : NULL;
++} // MOJOSHADER_headlessGetShaderParseData
+\ No newline at end of file
+diff --git a/mojoshader_internal.h b/mojoshader_internal.h
+index 61af06d..e67a923 100644
+--- a/mojoshader_internal.h
++++ b/mojoshader_internal.h
+@@ -340,7 +340,10 @@ static inline int Min(const int a, const int b)
+ {
+     return ((a < b) ? a : b);
+ } // Min
+-
++static inline int Max(const int a, const int b)
++{
++    return ((a > b) ? a : b);
++} // Max
+ 
+ // Hashtables...
+ 
