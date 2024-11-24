@@ -9,7 +9,7 @@ index 34d9045..f4c6aee 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -49,6 +49,7 @@ endif()
- 
+
  # Defines
  add_definitions(
 +	-DFNA3D_DRIVER_HEADLESS
@@ -38,7 +38,7 @@ index 17e890a..24768e6 100644
 +++ b/src/FNA3D.c
 @@ -40,6 +40,9 @@
  /* Drivers */
- 
+
  static const FNA3D_Driver *drivers[] = {
 +#if FNA3D_DRIVER_HEADLESS
 +    &HeadlessDriver,
@@ -50,7 +50,7 @@ index 17e890a..24768e6 100644
  				continue;
  			}
  		}
-+		else if (SDL_strcasecmp("Headless", drivers[i]->Name) != 0)
++		else if (SDL_strcasecmp("Headless", drivers[i]->Name) == 0)
 +		{
 +			// Only allow headless mode explicitly
 +			continue;
@@ -65,7 +65,7 @@ index 4f07960..b6e7f27 100644
 @@ -825,6 +825,7 @@ typedef struct FNA3D_Driver
  	);
  } FNA3D_Driver;
- 
+
 +FNA3D_SHAREDINTERNAL FNA3D_Driver HeadlessDriver;
  FNA3D_SHAREDINTERNAL FNA3D_Driver LegacyVulkanDriver;
  FNA3D_SHAREDINTERNAL FNA3D_Driver D3D11Driver;
