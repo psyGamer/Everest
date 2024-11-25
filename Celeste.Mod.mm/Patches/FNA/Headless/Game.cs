@@ -1,4 +1,5 @@
 #pragma warning disable CS0626 // Method, operator, or accessor is marked external and has no attributes on it
+#pragma warning disable CS0649 // Field is never assigned to, and will always have its default value
 
 using Mono.Cecil;
 using MonoMod;
@@ -10,13 +11,32 @@ using System;
 namespace Microsoft.Xna.Framework {
 
     [GameDependencyPatch("FNA")]
-    public partial class patch_Game {
+    public partial class patch_Game : Game {
+        // We're effectively in Game, but still need to "expose" private fields to our mod.
+        private readonly patch_GameTime gameTime;
 
         [MonoModIfFlag("Headless")]
         [MonoModConstructor]
         [MonoModIgnore]
         [PatchGameCtor]
         public extern void ctor();
+
+        // Directly call Update(), avoiding timing / Render()
+        [MonoModIfFlag("Headless")]
+        [MonoModLinkFrom("System.Void Microsoft.Xna.Framework.Game::Tick()")]
+        public void UpdateWrapper() {
+            gameTime.ElapsedGameTime = TargetElapsedTime;
+            gameTime.TotalGameTime += TargetElapsedTime;
+
+            Update(gameTime);
+        }
+    }
+
+    [GameDependencyPatch("FNA")]
+    public class patch_GameTime : GameTime {
+        // We're effectively in GameTime, but still need to "expose" private fields to our mod.
+        public new TimeSpan TotalGameTime { get; internal set; }
+        public new TimeSpan ElapsedGameTime { get; internal set; }
     }
 }
 
