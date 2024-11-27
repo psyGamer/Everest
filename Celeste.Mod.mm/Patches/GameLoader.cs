@@ -85,8 +85,10 @@ namespace Celeste {
             Stopwatch timer = Stopwatch.StartNew();
 
             Audio.Init();
-            // Original code loads audio banks here.
-            Settings.Instance.ApplyVolumes();
+            if (!Everest.Flags.IsHeadless) {
+                // Original code loads audio banks here.
+                Settings.Instance.ApplyVolumes();
+            }
             audioLoaded = true;
             Console.WriteLine(" - AUDIO LOAD: " + timer.ElapsedMilliseconds + "ms");
             timer.Stop();
@@ -112,6 +114,7 @@ namespace Celeste {
             timer.Stop();
 
             timer = Stopwatch.StartNew();
+            // TODO: Disable FTL in headless
             MainThreadHelper.Boost = 50;
             patch_VirtualTexture.WaitFinishFastTextureLoading();
             MainThreadHelper.Schedule(() => MainThreadHelper.Boost = 0).AsTask().Wait();

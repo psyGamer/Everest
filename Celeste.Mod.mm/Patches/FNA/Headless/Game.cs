@@ -42,13 +42,13 @@ namespace Microsoft.Xna.Framework {
 
 namespace MonoMod {
     /// <summary>
-    /// A patch replacing the GameWindow instance
+    /// A patch which replaces the GameWindow instance with a headless one
     /// </summary>
     [MonoModCustomMethodAttribute(nameof(MonoModRules.PatchGameCtor))]
     class PatchGameCtor : Attribute { }
 
     /// <summary>
-    /// A patch removing registering the graphics adapter
+    /// A patch which removes registering the graphics adapter
     /// </summary>
     [MonoModCustomMethodAttribute(nameof(MonoModRules.PatchGameBeforeLoop))]
     class PatchGameBeforeLoop : Attribute { }

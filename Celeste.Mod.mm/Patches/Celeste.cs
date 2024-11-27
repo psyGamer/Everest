@@ -329,6 +329,8 @@ https://discord.gg/6qjaePQ");
             Everest.Initialize();
         }
 
+        [MonoModIfFlag("Headless")]
+        [PatchCelesteLoadContent]
         protected extern void orig_LoadContent();
         protected override void LoadContent() {
             // Note: You may instinctually call base.LoadContent();
@@ -399,6 +401,12 @@ namespace MonoMod {
     [MonoModCustomMethodAttribute(nameof(MonoModRules.PatchCelesteMain))]
     class PatchCelesteMainAttribute : Attribute { }
 
+    /// <summary>
+    /// Patch the original LoadContent method, to avoid loading graphics in headless mode
+    /// </summary>
+    [MonoModCustomMethodAttribute(nameof(MonoModRules.PatchCelesteLoadContent))]
+    class PatchCelesteLoadContentAttribute : Attribute { }
+
     static partial class MonoModRules {
 
         public static void PatchCelesteSetHeadlessFlag(ILContext context, CustomAttribute attrib) {
@@ -410,6 +418,22 @@ namespace MonoMod {
             // Insert 'Everest.Flags.IsHeadless = <true/false>'
             cursor.EmitLdcI4(MonoModRule.Flag.Get("Headless") ? 1 : 0);
             cursor.EmitCall(m_Flags_setIsHeadless);
+        }
+
+        public static void PatchCelesteLoadContent(ILContext context, CustomAttribute attrib) {
+            ILCursor cursor = new ILCursor(context);
+
+            TypeDefinition t_Flags = MonoModRule.Modder.Module.GetType("Celeste.Mod.Everest/Flags");
+            MethodReference m_Flags_getIsHeadless = MonoModRule.Modder.Module.ImportReference(t_Flags.FindProperty("IsHeadless")!.GetMethod);
+
+            // Replace 'if (!IsGGP)' with 'if (!IsGGP && !Everest.Flags.IsHeadless)'
+            ILLabel label = null;
+            cursor.GotoNext(MoveType.After, instr =>
+                    instr.MatchLdsfld("Celeste.Celeste", "IsGGP"),
+                    instr => instr.MatchBrtrue(out label));
+
+            cursor.EmitCall(m_Flags_getIsHeadless);
+            cursor.EmitBrtrue(label);
         }
 
         public static void PatchCelesteMain(ILContext context, CustomAttribute attrib) {
