@@ -44,13 +44,6 @@ namespace Monocle {
 
         private List<ModAsset> _ModAssets;
 
-        // Stub texture used for headless mode
-        // 8x8 since that's a common texture size (also < 8 breaks tilesets)
-        private static MTexture stub = null;
-        internal static MTexture Stub => stub ??= new MTexture((VirtualTexture) (object) new patch_VirtualTexture("stub", 8, 8, Color.White)) {
-            AtlasPath = "stub"
-        };
-
         [MonoModIgnore]
         public patch_MTexture(VirtualTexture vtex)
             : base(vtex) { }

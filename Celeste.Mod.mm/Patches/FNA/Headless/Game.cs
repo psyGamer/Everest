@@ -50,6 +50,7 @@ namespace MonoMod {
     /// <summary>
     /// A patch which removes registering the graphics adapter
     /// </summary>
+    [MonoModIfFlag("Headless")]
     [MonoModCustomMethodAttribute(nameof(MonoModRules.PatchGameBeforeLoop))]
     class PatchGameBeforeLoop : Attribute { }
 

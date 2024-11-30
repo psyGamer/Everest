@@ -10,7 +10,6 @@ namespace Microsoft.Xna.Framework {
     public partial class patch_Game {
         public GameWindow Window { get; private set; }
 
-        [MonoModIfFlag("Headless")]
         [PatchGameBeforeLoop]
         private extern void orig_BeforeLoop();
 

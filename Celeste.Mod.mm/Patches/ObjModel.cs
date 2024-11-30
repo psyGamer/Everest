@@ -32,6 +32,7 @@ namespace Celeste {
 
         [MonoModIfFlag("Headless")]
         [MonoModReplace]
+        [PatchInterface]
         public new void Dispose() { }
 
         /// <summary>

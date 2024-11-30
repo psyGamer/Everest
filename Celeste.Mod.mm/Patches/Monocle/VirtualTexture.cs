@@ -290,8 +290,10 @@ namespace Monocle {
         internal patch_VirtualTexture(string path) {
             Path = path;
             Name = path;
-            if (!Preload())
+            if (!Preload(force: Everest.Flags.IsHeadless) && !Everest.Flags.IsHeadless)
                 Reload();
+            if (Everest.Flags.IsHeadless)
+                Texture_Unsafe = new Texture2D(Engine.Graphics.GraphicsDevice, Width, Height);
         }
 
         [MonoModConstructor]
@@ -301,16 +303,20 @@ namespace Monocle {
             Width = width;
             Height = height;
             this.color = color;
-            if (!Preload())
+            if (!Preload(force: Everest.Flags.IsHeadless) && !Everest.Flags.IsHeadless)
                 Reload();
+            if (Everest.Flags.IsHeadless)
+                Texture_Unsafe = new Texture2D(Engine.Graphics.GraphicsDevice, Width, Height);
         }
 
         [MonoModConstructor]
         internal patch_VirtualTexture(ModAsset metadata) {
             Metadata = metadata;
             Name = metadata.PathVirtual;
-            if (!Preload())
+            if (!Preload(force: Everest.Flags.IsHeadless) && !Everest.Flags.IsHeadless)
                 Reload();
+            if (Everest.Flags.IsHeadless)
+                Texture_Unsafe = new Texture2D(Engine.Graphics.GraphicsDevice, Width, Height);
         }
 
         [MonoModReplace]
@@ -803,7 +809,7 @@ namespace Monocle {
         }
 
         private bool Preload(bool force = false) {
-            if (Everest.Flags.IsHeadless || !CoreModule.Settings.LazyLoading && !force) {
+            if (!CoreModule.Settings.LazyLoading && !force) {
                 return false;
             }
 

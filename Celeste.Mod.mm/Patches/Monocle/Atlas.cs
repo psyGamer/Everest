@@ -20,7 +20,7 @@ namespace Monocle {
         /// <summary>
         /// The internal string-MTexture dictionary.
         /// </summary>
-        public Dictionary<string, MTexture> Textures => Everest.Flags.IsHeadless ? stubbedTexturesDict : textures;
+        public Dictionary<string, MTexture> Textures => textures;
         private Dictionary<string, string> links = new Dictionary<string, string>();
         private Dictionary<string, List<MTexture>> orderedTexturesCache;
         private Stack<MTexture> FallbackStack;
@@ -32,10 +32,6 @@ namespace Monocle {
         public string RelativeDataPath;
         public string[] DataPaths;
         public AtlasDataFormat? DataFormat;
-
-        // Used for headless mode
-        private static readonly List<MTexture> stubbedTexturesList = new() { patch_MTexture.Stub };
-        private static readonly Dictionary<string, MTexture> stubbedTexturesDict = new() { { "stub", patch_MTexture.Stub } };
 
         [MonoModReplace]
         private static void ReadAtlasData(Atlas _atlas, string path, AtlasDataFormat format) {
@@ -267,10 +263,6 @@ namespace Monocle {
         public static extern Atlas orig_FromAtlas(string path, AtlasDataFormat format);
         /// <inheritdoc cref="Atlas.FromAtlas(string, AtlasDataFormat)"/>
         public static new Atlas FromAtlas(string path, AtlasDataFormat format) {
-            if (Everest.Flags.IsHeadless) {
-                return new Atlas();
-            }
-
             patch_Atlas atlas = (patch_Atlas) orig_FromAtlas(path, format);
             atlas.DataMethod = "FromAtlas";
             atlas.DataPath = path;
@@ -284,10 +276,6 @@ namespace Monocle {
         public static extern Atlas orig_FromMultiAtlas(string rootPath, string[] dataPath, AtlasDataFormat format);
         /// <inheritdoc cref="Atlas.FromMultiAtlas(string, string[], AtlasDataFormat)"/>
         public static new Atlas FromMultiAtlas(string rootPath, string[] dataPath, AtlasDataFormat format) {
-            if (Everest.Flags.IsHeadless) {
-                return new Atlas();
-            }
-
             patch_Atlas atlas = (patch_Atlas) orig_FromMultiAtlas(rootPath, dataPath, format);
             atlas.DataMethod = "FromMultiAtlas";
             atlas.DataPath = rootPath;
@@ -302,10 +290,6 @@ namespace Monocle {
         public static extern Atlas orig_FromMultiAtlas(string rootPath, string filename, AtlasDataFormat format);
         /// <inheritdoc cref="Atlas.FromMultiAtlas(string, string, AtlasDataFormat)"/>
         public static new Atlas FromMultiAtlas(string rootPath, string filename, AtlasDataFormat format) {
-            if (Everest.Flags.IsHeadless) {
-                return new Atlas();
-            }
-
             patch_Atlas atlas = (patch_Atlas) orig_FromMultiAtlas(rootPath, filename, format);
             atlas.DataMethod = "FromMultiAtlas";
             atlas.DataPath = rootPath;
@@ -320,10 +304,6 @@ namespace Monocle {
         public static extern Atlas orig_FromDirectory(string path);
         /// <inheritdoc cref="Atlas.FromDirectory(string)"/>
         public static new Atlas FromDirectory(string path) {
-            if (Everest.Flags.IsHeadless) {
-                return new Atlas();
-            }
-
             patch_Atlas atlas = (patch_Atlas) orig_FromDirectory(path);
             atlas.DataMethod = "FromDirectory";
             atlas.DataPath = path;
@@ -372,7 +352,7 @@ namespace Monocle {
         /// Feed the given ModAsset into the atlas.
         /// </summary>
         public void Ingest(ModAsset asset) {
-            if (Everest.Flags.IsHeadless || asset == null)
+            if (asset == null)
                 return;
 
             // Crawl through all child assets.
@@ -429,18 +409,10 @@ namespace Monocle {
         }
 
         public bool HasAtlasSubtextures(string key) {
-            if (Everest.Flags.IsHeadless) {
-                return true;
-            }
-
             return HasAtlasSubtexturesAt(key, 0);
         }
 
         public bool HasAtlasSubtexturesAt(string key, int index) {
-            if (Everest.Flags.IsHeadless) {
-                return true;
-            }
-
             if (orderedTexturesCache.TryGetValue(key, out List<MTexture> list)) {
                 return index >= 0 && index < list.Count;
             } else {
@@ -448,29 +420,9 @@ namespace Monocle {
             }
         }
 
-        [MonoModIfFlag("Headless")]
-        [MonoModReplace]
-        public new bool Has(string id) {
-            return true;
-        }
-
-        [MonoModIfFlag("Headless")]
-        [MonoModReplace]
-        public new MTexture GetOrDefault(string id, MTexture defaultTexture) {
-            return defaultTexture;
-        }
-
-        [MonoModIfFlag("Headless")]
-        [MonoModReplace]
-        public new void Dispose() { }
-
         // log missing subtextures when getting an animation (for example, decals)
         public extern List<MTexture> orig_GetAtlasSubtextures(string key);
         public new List<MTexture> GetAtlasSubtextures(string key) {
-            if (Everest.Flags.IsHeadless) {
-                return stubbedTexturesList;
-            }
-
             PushFallback(null);
             List<MTexture> result = orig_GetAtlasSubtextures(key);
             PopFallback();
@@ -488,10 +440,6 @@ namespace Monocle {
 
         [MonoModReplace]
         public new MTexture GetAtlasSubtexturesAt(string key, int index) {
-            if (Everest.Flags.IsHeadless) {
-                return patch_MTexture.Stub;
-            }
-
             if (orderedTexturesCache.TryGetValue(key, out List<MTexture> list)) {
                 if (index < 0 || index >= list.Count) {
                     Logger.Warn("Atlas", $"Requested atlas subtexture that falls out of range: {RelativeDataPath}{key} {index}");
@@ -517,22 +465,16 @@ namespace Monocle {
         public new MTexture this[string id] {
             [MonoModReplace]
             get {
-                if (Everest.Flags.IsHeadless) {
-                    return patch_MTexture.Stub;
-                }
-
                 if (!textures.TryGetValue(id, out MTexture result)) {
                     Logger.Warn("Atlas", $"Requested texture that does not exist: {RelativeDataPath}{id}");
                     return GetFallback();
                 }
                 return result;
             }
-            [MonoModReplace]
-            set {
-                if (!Everest.Flags.IsHeadless) {
-                    textures[id] = value;
-                }
-            }
+
+            // we don't want to modify the setter, but want it to exist in the patch class so that we can call it from within our patches.
+            [MonoModIgnore]
+            set { }
         }
     }
     public static class AtlasExt {
