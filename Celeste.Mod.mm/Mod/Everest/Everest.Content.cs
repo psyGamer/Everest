@@ -1,14 +1,13 @@
 using Celeste.Mod.Helpers;
 using Celeste.Mod.Meta;
-using Ionic.Zip;
 using MAB.DotIgnore;
 using Microsoft.Xna.Framework.Graphics;
 using Monocle;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -368,15 +367,6 @@ namespace Celeste.Mod {
     }
 
     public class ZipModContent : ModContent {
-        private static readonly FieldInfo f_ZipEntry__container =
-            typeof(ZipEntry).GetField("_container", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly FieldInfo f_ZipEntry__CompressionMethod_FromZipFile =
-            typeof(ZipEntry).GetField("_CompressionMethod_FromZipFile", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly FieldInfo f_ZipEntry__CompressedFileDataSize =
-            typeof(ZipEntry).GetField("_CompressedFileDataSize", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly FieldInfo f_ZipEntry__archiveStream =
-            typeof(ZipEntry).GetField("_archiveStream", BindingFlags.NonPublic | BindingFlags.Instance);
-
         public override string DefaultName => System.IO.Path.GetFileName(Path);
 
         /// <summary>
@@ -384,94 +374,103 @@ namespace Celeste.Mod {
         /// </summary>
         public readonly string Path;
 
-        /// <summary>
-        /// The loaded archive containing the mod content.
-        /// </summary>
-        public readonly ZipFile Zip;
-
-        private readonly ZipModSecret Secret;
-        private object _container;
-
-        public class ZipModSecret {
-            private ZipModContent Content;
-            internal ZipModSecret(ZipModContent content) {
-                Content = content;
-            }
-            public ZipEntry OpenParaEntry(ZipEntry real) => Content.OpenParaEntry(real);
-            public void CloseParaEntry(ZipEntry fake) => Content.CloseParaEntry(fake);
-        }
-
-        private class ZipPoolEntry {
-            public Stream Value;
-        }
-
-        private ConcurrentBag<ZipPoolEntry> Pool = new ConcurrentBag<ZipPoolEntry>();
-
         public ZipModContent(string path) {
             Path = path;
-            Zip = OpenZip();
-            Secret = new ZipModSecret(this);
         }
 
-        public ZipFile OpenZip() => new ZipFile(Path);
+        private ZipArchive SharedZip;
+        private int SharedZipUsers = 0;
+        private readonly object SharedZipLock = new object();
+        private bool disposed = false;
 
-        private ZipEntry OpenParaEntry(ZipEntry real) {
-            Stream stream;
+        private readonly object ReadingLock = new object();
 
-            Retake:
-            if (Pool.TryTake(out ZipPoolEntry pooled)) {
-                stream = Interlocked.Exchange(ref pooled.Value, null);
-                if (stream == null)
-                    goto Retake;
-                stream.Seek(0, SeekOrigin.Begin);
-            } else {
-                // Same as DotNetZip itself. Luckily we're not dealing with segmented (multi-part) zips.
-                stream = File.Open(Path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Write);
+        /// <summary>
+        /// Object granting access to a shared ZipArchive instance, keeping track of the number of usages
+        /// to dispose the shared instance once no one uses it anymore.
+        /// </summary>
+        public class ZipFileAccessor : IDisposable {
+            private ZipModContent Parent;
+
+            /// <summary>
+            /// The loaded archive containing the mod content.
+            /// </summary>
+            public ZipArchive Zip => Parent.SharedZip;
+
+            internal ZipFileAccessor(ZipModContent parent) {
+                Parent = parent;
             }
 
-            // TODO: ILHook CloneForNewZipFile to adapt it to our needs and to simplify the following code.
-            // Nothing else should be using it anyway (and if anything does, copy method with DynamicMethodDefinition).
+            private bool disposed = false;
 
-            // Thanks, DotNetZip, for being unwilling to clone uncompressed entries in compressed zips?!
-            // ZipEntry has got a special CompressionMethod setter while ZipFile doesn't.
-            // Let's hope that its value isn't used anywhere else...
-            ZipEntry fake;
-            lock (Zip) {
-                Zip.CompressionMethod = real.CompressionMethod;
-                fake = real.CloneForNewZipFile(Zip);
+            public void Dispose() {
+                if (disposed) return;
+                disposed = true;
+
+                lock (Parent.SharedZipLock) {
+                    Parent.SharedZipUsers--;
+                    if (Parent.SharedZipUsers > 0) return;
+
+                    // if the file goes unused for 10 seconds, close it
+                    QueuedTaskHelper.Do("SharedZipRelease-" + Parent.Path, delay: 10, DisposeParentZip);
+                }
             }
-            // Can't re-set the compression methods as this might be conflicting with other ongoing clonings.
-            f_ZipEntry__container.SetValue(fake, _container ??= f_ZipEntry__container.GetValue(real));
-            f_ZipEntry__CompressionMethod_FromZipFile.SetValue(fake, (short) real.CompressionMethod);
-            f_ZipEntry__CompressedFileDataSize.SetValue(fake, f_ZipEntry__CompressedFileDataSize.GetValue(real));
-            f_ZipEntry__archiveStream.SetValue(fake, stream);
-            return fake;
+
+            private void DisposeParentZip() {
+                lock (Parent.SharedZipLock) {
+                    // the task should get canceled when a new user shows up, but you never know...
+                    if (Parent.SharedZipUsers > 0) return;
+
+                    Logger.Debug("ZipModContent", $"Closing zip: {Parent.Path}");
+                    Parent.SharedZip.Dispose();
+                    Parent.SharedZip = null;
+                }
+            }
         }
 
-        private void CloseParaEntry(ZipEntry fake) {
-            // Allow reopens - even by other threads - within a certain timeframe.
-            Stream stream = (Stream) f_ZipEntry__archiveStream.GetValue(fake);
-            ZipPoolEntry pooled = new ZipPoolEntry() {
-                Value = stream
-            };
-            Pool.Add(pooled);
-            QueuedTaskHelper.Do(stream, 1.5, () => Interlocked.Exchange(ref pooled.Value, null)?.Dispose());
+        public ZipFileAccessor Open() {
+            lock (SharedZipLock) {
+                if (disposed) throw new ObjectDisposedException(nameof(ZipModContent));
+
+                if (SharedZip == null) {
+                    Logger.Debug("ZipModContent", $"Opening zip: {Path}");
+                    SharedZip = ZipFile.OpenRead(Path);
+                }
+
+                SharedZipUsers++;
+                QueuedTaskHelper.Cancel("SharedZipRelease-" + Path);
+                return new ZipFileAccessor(this);
+            }
         }
 
         protected override void Crawl() {
-            foreach (ZipEntry entry in Zip.Entries) {
-                string entryName = entry.FileName.Replace('\\', '/');
-                if (entryName.EndsWith("/"))
-                    continue;
-                Add(entryName, new ZipModAsset(this, Secret, entry));
+            using ZipFileAccessor zip = Open();
+
+            foreach (ZipArchiveEntry entry in zip.Zip.Entries) {
+                string entryName = entry.FullName.Replace('\\', '/');
+                if (entryName.EndsWith("/")) continue;
+                Add(entryName, new ZipModAsset(this, entry.FullName));
+            }
+        }
+
+        public MemoryStream GetContents(string path) {
+            lock (ReadingLock) {
+                using ZipFileAccessor zip = Open();
+                ZipArchiveEntry entry = zip.Zip.GetEntry(path);
+                if (entry == null) throw new KeyNotFoundException($"File {path} not found in archive {Path}");
+                return entry.ExtractStream();
             }
         }
 
         protected override void Dispose(bool disposing) {
             base.Dispose(disposing);
-            Zip.Dispose();
-            foreach (ZipPoolEntry pooled in Pool) {
-                Interlocked.Exchange(ref pooled.Value, null)?.Dispose();
+
+            if (disposed) return;
+
+            lock (ReadingLock) {
+                disposed = true;
+                SharedZip.Dispose();
+                SharedZip = null;
             }
         }
     }
