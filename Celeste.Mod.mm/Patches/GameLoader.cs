@@ -48,7 +48,7 @@ namespace Celeste {
                 break;
             }
 
-            if (CoreModule.Settings.LaunchWithoutIntro && introRoutine != null) {
+            if ((CoreModule.Settings.LaunchWithoutIntro || Everest.Flags.IsHeadless) && introRoutine != null) {
                 skipped = true;
             }
         }
