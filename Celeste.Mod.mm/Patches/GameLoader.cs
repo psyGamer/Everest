@@ -137,7 +137,7 @@ namespace Celeste {
 
             bool transitionToModUpdater = false;
 
-            if (CoreModule.Settings.AutoUpdateModsOnStartup) {
+            if (CoreModule.Settings.AutoUpdateModsOnStartup && !Everest.Flags.IsHeadless) {
                 if (!ModUpdaterHelper.IsAsyncUpdateCheckingDone()) {
                     // update checking is not done yet.
                     // transition to mod updater screen to display the "checking for updates" message.
