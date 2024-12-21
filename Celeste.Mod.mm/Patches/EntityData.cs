@@ -20,8 +20,9 @@ namespace Celeste {
         /// <param name="defaultValue"></param>
         /// <returns></returns>
         public string String(string key, string defaultValue = null) {
-            if (Values != null && Values.TryGetValue(key, out object value) && !string.IsNullOrEmpty(value?.ToString())) {
-                    return value.ToString();
+            string valueStr;
+            if (Values != null && Values.TryGetValue(key, out object value) && !string.IsNullOrEmpty(valueStr = value?.ToString())) {
+                    return valueStr;
             }
             return defaultValue;
         }
