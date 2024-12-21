@@ -21,7 +21,7 @@ namespace Celeste {
         /// <returns></returns>
         public string String(string key, string defaultValue = null) {
             string valueStr;
-            if (Values != null && Values.TryGetValue(key, out object value) && !string.IsNullOrEmpty(valueStr = value?.ToString())) {
+            if (Values != null && Values.TryGetValue(key, out object value) && !string.IsNullOrWhiteSpace(valueStr = value?.ToString())) {
                     return valueStr;
             }
             return defaultValue;
