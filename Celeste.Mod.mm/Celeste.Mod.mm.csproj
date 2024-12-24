@@ -45,9 +45,6 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.2" />
     <ProjectReference Include="..\external\NLua\build\net6.0\NLua.net6.0.csproj" />
     <PackageReference Include="MAB.DotIgnore" Version="3.0.2" />
-
-    <!-- Dependency not used by Everest itself, but kept for mod compatibility reasons -->
-    <PackageReference Include="DotNetZip" Version="1.16.0" />
   </ItemGroup>
 
   <!--
@@ -70,6 +67,12 @@
     </Content>
     <Content Remove="..\lib-ext\.gitignore" />
     <Content Remove="..\lib-ext\FNA3D.patch" />
+    <Content Remove="..\lib-ext\DotNetZip.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\lib-ext\DotNetZip.dll" Link="DotNetZip.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
