@@ -741,29 +741,29 @@ namespace Celeste.Mod {
                 // file without extension
                 ReadOnlySpan<char> fileNameOnlySpan = Path.GetFileNameWithoutExtension(fileNameSpan);
 
-                bool shouldSendWarning = true;
+                bool warningAlreadySent = false;
 
-                if (MatchExtension(fileNameSpan, "dll", ref shouldSendWarning)) {
+                if (MatchExtension(fileSpan, fileNameSpan, "dll", ref warningAlreadySent)) {
                     type = typeof(AssetTypeAssembly);
                     return fileSpan.ToString();
                 }
 
-                if (MatchExtension(fileNameSpan, "png", ref shouldSendWarning)) {
+                if (MatchExtension(fileSpan, fileNameSpan, "png", ref warningAlreadySent)) {
                     type = typeof(Texture2D);
                     return fileSpan[..^4].ToString();
                 }
 
-                if (MatchExtension(fileNameSpan, "obj", ref shouldSendWarning, isTextBased: true)) {
+                if (MatchExtension(fileSpan, fileNameSpan, "obj", ref warningAlreadySent, isTextBased: true)) {
                     type = typeof(ObjModel);
                     return fileSpan[..^4].ToString();
                 }
 
-                if (MatchExtension(fileNameSpan, "obj.export", ref shouldSendWarning)) {
+                if (MatchExtension(fileSpan, fileNameSpan, "obj.export", ref warningAlreadySent)) {
                     type = typeof(AssetTypeObjModelExport);
                     return fileSpan[..^7].ToString();
                 }
 
-                if (MatchExtension(fileNameSpan, "yaml", ref shouldSendWarning, isTextBased: true)
+                if (MatchExtension(fileSpan, fileNameSpan, "yaml", ref warningAlreadySent, isTextBased: true)
                     && directorySpan.IsEmpty
                     && SpanEqualsAny(fileNameOnlySpan, "metadata", "multimetadata", "everest")) {
                     type = typeof(AssetTypeMetadataYaml);
@@ -771,14 +771,14 @@ namespace Celeste.Mod {
                     return fileSpan[..^5].ToString();
                 }
 
-                if (MatchExtension(fileNameSpan, "yml", ref shouldSendWarning, isTextBased: true)
+                if (MatchExtension(fileSpan, fileNameSpan, "yml", ref warningAlreadySent, isTextBased: true)
                     && directorySpan.IsEmpty
                     && SpanEquals(fileNameOnlySpan, "everest")) {
                     type = typeof(AssetTypeMetadataYaml);
                     return fileSpan[..^4].ToString();
                 }
 
-                if (MatchExtension(fileNameSpan, "xml", ref shouldSendWarning, isTextBased: true)) {
+                if (MatchExtension(fileSpan, fileNameSpan, "xml", ref warningAlreadySent, isTextBased: true)) {
                     if (directorySpan.IsEmpty && SpanEquals(fileNameOnlySpan, "DecalRegistry")) {
                         type = typeof(AssetTypeDecalRegistry);
                         return fileSpan[..^4].ToString();
@@ -789,27 +789,27 @@ namespace Celeste.Mod {
                     }
                 }
 
-                if (directorySpan.IsEmpty && fileNameOnlySpan.IsEmpty && MatchExtension(fileNameSpan, "everestignore", ref shouldSendWarning, isTextBased: true)) {
+                if (directorySpan.IsEmpty && fileNameOnlySpan.IsEmpty && MatchExtension(fileSpan, fileNameSpan, "everestignore", ref warningAlreadySent, isTextBased: true)) {
                     type = typeof(AssetTypeEverestIgnore);
                     return "";
                 }
 
                 if (directorySpan.StartsWith("Dialog/")) {
-                    if (MatchExtension(fileNameSpan, "txt", ref shouldSendWarning, isTextBased: true)) {
+                    if (MatchExtension(fileSpan, fileNameSpan, "txt", ref warningAlreadySent, isTextBased: true)) {
                         type = typeof(AssetTypeDialog);
                         return fileSpan[..^4].ToString();
                     }
-                    if (MatchMultipartExtension(fileNameSpan, "txt.export", ref shouldSendWarning)) {
+                    if (MatchMultipartExtension(fileSpan, fileNameSpan, "txt.export", ref warningAlreadySent)) {
                         type = typeof(AssetTypeDialogExport);
                         return fileSpan[..^7].ToString();
                     }
-                    if (MatchExtension(fileNameSpan, "fnt", ref shouldSendWarning, isTextBased: true)) {
+                    if (MatchExtension(fileSpan, fileNameSpan, "fnt", ref warningAlreadySent, isTextBased: true)) {
                         type = typeof(AssetTypeFont);
                         return fileSpan[..^4].ToString();
                     }
                 }
 
-                if (MatchExtension(fileNameSpan, "bin", ref shouldSendWarning)) {
+                if (MatchExtension(fileSpan, fileNameSpan, "bin", ref warningAlreadySent)) {
                     if (directorySpan.StartsWith("Maps/")) {
                         type = typeof(AssetTypeMap);
                         return fileSpan[..^4].ToString();
@@ -821,15 +821,15 @@ namespace Celeste.Mod {
                 }
 
                 if (directorySpan.StartsWith("Audio/")) {
-                    if (MatchExtension(fileNameSpan, "bank", ref shouldSendWarning)) {
+                    if (MatchExtension(fileSpan, fileNameSpan, "bank", ref warningAlreadySent)) {
                         type = typeof(AssetTypeBank);
                         return fileSpan[..^5].ToString();
                     }
-                    if (MatchMultipartExtension(fileNameSpan, "guids.txt", ref shouldSendWarning, isTextBased: true)) {
+                    if (MatchMultipartExtension(fileSpan, fileNameSpan, "guids.txt", ref warningAlreadySent, isTextBased: true)) {
                         type = typeof(AssetTypeGUIDs);
                         return fileSpan[..^4].ToString();
                     }
-                    if (MatchMultipartExtension(fileNameSpan, "GUIDs.txt", ref shouldSendWarning, isTextBased: true)) {
+                    if (MatchMultipartExtension(fileSpan, fileNameSpan, "GUIDs.txt", ref warningAlreadySent, isTextBased: true)) {
                         // default fmod casing
                         type = typeof(AssetTypeGUIDs);
 
@@ -859,23 +859,23 @@ namespace Celeste.Mod {
                 }
 
                 // assign supported generic types if we haven't found a more specific one
-                if (MatchExtension(fileNameSpan, "lua", ref shouldSendWarning, isTextBased: true)) {
+                if (MatchExtension(fileSpan, fileNameSpan, "lua", ref warningAlreadySent, isTextBased: true)) {
                     type = typeof(AssetTypeLua);
                     return fileSpan[..^4].ToString();
                 }
-                if (MatchExtension(fileNameSpan, "txt", ref shouldSendWarning, isTextBased: true)) {
+                if (MatchExtension(fileSpan, fileNameSpan, "txt", ref warningAlreadySent, isTextBased: true)) {
                     type = typeof(AssetTypeText);
                     return fileSpan[..^4].ToString();
                 }
-                if (MatchExtension(fileNameSpan, "xml", ref shouldSendWarning, isTextBased: true)) {
+                if (MatchExtension(fileSpan, fileNameSpan, "xml", ref warningAlreadySent, isTextBased: true)) {
                     type = typeof(AssetTypeXml);
                     return fileSpan[..^4].ToString();
                 }
-                if (MatchExtension(fileNameSpan, "yml", ref shouldSendWarning, isTextBased: true)) {
+                if (MatchExtension(fileSpan, fileNameSpan, "yml", ref warningAlreadySent, isTextBased: true)) {
                     type = typeof(AssetTypeYaml);
                     return fileSpan[..^4].ToString();
                 }
-                if (MatchExtension(fileNameSpan, "yaml", ref shouldSendWarning, isTextBased: true)) {
+                if (MatchExtension(fileSpan, fileNameSpan, "yaml", ref warningAlreadySent, isTextBased: true)) {
                     type = typeof(AssetTypeYaml);
                     format = "yml";
                     return fileSpan[..^5].ToString();
@@ -898,22 +898,26 @@ namespace Celeste.Mod {
             ///   Match a file extension, and log a warning if the file extension is duplicated.<br/>
             ///   If the file is text-based, log a warning if the file has an extra <c>.txt</c> extension.
             /// </summary>
+            /// <param name="filePath">
+            ///   The path of the file. Used when logging the warning.
+            /// </param>
             /// <param name="fileName">
             ///   The file name to check, with the extensions.
             /// </param>
             /// <param name="expectedExtension">
             ///   The extension to check for, without the leading dot.
             /// </param>
-            /// <param name="shouldSendWarning">
-            ///   Whether a warning should be sent about the file name extension(s).
+            /// <param name="warningAlreadySent">
+            ///   Whether a warning has already been sent about the file name extension(s).
             /// </param>
             /// <param name="isTextBased">
             ///   Whether the file is text-based, and to check for an extra <c>.txt</c> extension.
             /// </param>
             private static bool MatchExtension(
+                ReadOnlySpan<char> filePath,
                 ReadOnlySpan<char> fileName,
                 ReadOnlySpan<char> expectedExtension,
-                ref bool shouldSendWarning,
+                ref bool warningAlreadySent,
                 bool isTextBased = false)
             {
                 ReadOnlySpan<char> extension = Path.GetExtension(fileName);
@@ -928,15 +932,15 @@ namespace Celeste.Mod {
                     // this is silly, but it works
                     extension = Path.GetExtension(Path.GetFileNameWithoutExtension(fileName));
 
-                    if (shouldSendWarning && !extension.IsEmpty && extension[1..].Equals(expectedExtension, StringComparison.Ordinal)) {
-                        Logger.Warn("Content", $"\"{fileName}\" has a doubled extension! It may not be handled correctly.");
-                        shouldSendWarning = false;
+                    if (!warningAlreadySent && !extension.IsEmpty && extension[1..].Equals(expectedExtension, StringComparison.Ordinal)) {
+                        Logger.Warn("Content", $"\"{filePath}\" has a doubled extension! It may not be handled correctly.");
+                        warningAlreadySent = true;
                     }
 
                     return true;
                 }
 
-                if (!shouldSendWarning)
+                if (warningAlreadySent)
                     // we don't care anymore if a warning has already been logged
                     return false;
 
@@ -944,8 +948,8 @@ namespace Celeste.Mod {
                     extension = Path.GetExtension(Path.GetFileNameWithoutExtension(fileName));
 
                     if (!extension.IsEmpty && extension[1..].Equals(expectedExtension, StringComparison.Ordinal)) {
-                        Logger.Warn("Content", $"\"{fileName}\" has an extra \".txt\" extension! It may not be handled correctly.");
-                        shouldSendWarning = false;
+                        Logger.Warn("Content", $"\"{filePath}\" has an extra \".txt\" extension! It may not be handled correctly.");
+                        warningAlreadySent = true;
                     }
                 }
 
@@ -956,27 +960,31 @@ namespace Celeste.Mod {
             ///   Match a multipart file extension, and log a warning if the last part of the file extension is duplicated.<br/>
             ///   If the file is text-based, log a warning if the file has an extra <c>.txt</c> extension.
             /// </summary>
+            /// <param name="filePath">
+            ///   The path of the file. Used when logging the warning.
+            /// </param>
             /// <param name="fileName">
             ///   The file name to check, with the extensions.
             /// </param>
             /// <param name="expectedExtension">
             ///   The multipart extension to check for, without the leading dot.
             /// </param>
-            /// <param name="shouldSendWarning">
-            ///   Whether a warning should be sent about the file name extension(s).
+            /// <param name="warningAlreadySent">
+            ///   Whether a warning has already been sent about the file name extension(s).
             /// </param>
             /// <param name="isTextBased">
             ///   Whether the file is text-based, and to check for an extra <c>.txt</c> extension.
             /// </param>
             private static bool MatchMultipartExtension(
+                ReadOnlySpan<char> filePath,
                 ReadOnlySpan<char> fileName,
                 ReadOnlySpan<char> expectedExtension,
-                ref bool shouldSendWarning,
+                ref bool warningAlreadySent,
                 bool isTextBased = false)
             {
                 // use the simpler function if this is just a singlepart extension
                 if (expectedExtension.IndexOf('.') == -1)
-                    return MatchExtension(fileName, expectedExtension, ref shouldSendWarning, isTextBased);
+                    return MatchExtension(filePath, fileName, expectedExtension, ref warningAlreadySent, isTextBased);
 
                 // find all indices of '.'
                 List<int> expectedExtensionDotIndices = new List<int>();
@@ -1002,7 +1010,7 @@ namespace Celeste.Mod {
                     // extensions match perfectly
                     return true;
 
-                if (!shouldSendWarning)
+                if (warningAlreadySent)
                     // we don't care anymore if a warning has already been logged
                     return false;
 
@@ -1026,11 +1034,11 @@ namespace Celeste.Mod {
 
                     ReadOnlySpan<char> lastIntendedExtensionPart = expectedExtension[expectedExtensionDotIndices[0]..];
                     if (actualExtension.Equals(lastIntendedExtensionPart, StringComparison.Ordinal)) {
-                        Logger.Warn("Content", $"\"{fileName}\" has a doubled extension! It may not be handled correctly.");
-                        shouldSendWarning = false;
+                        Logger.Warn("Content", $"\"{filePath}\" has a doubled extension! It may not be handled correctly.");
+                        warningAlreadySent = true;
                     } else if (actualExtension.Equals("txt", StringComparison.Ordinal)) {
-                        Logger.Warn("Content", $"\"{fileName}\" has an extra \".txt\" extension! It may not be handled correctly.");
-                        shouldSendWarning = false;
+                        Logger.Warn("Content", $"\"{filePath}\" has an extra \".txt\" extension! It may not be handled correctly.");
+                        warningAlreadySent = true;
                     }
                 }
 
