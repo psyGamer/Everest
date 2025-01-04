@@ -50,7 +50,6 @@ public static class LibAndDepHandling {
                 libDstDir = Path.Combine(Globals.PathGame, "lib64-linux");
                 MiscUtil.ParseMonoNativeLibConfig(Path.Combine(Globals.PathOrig, "Celeste.exe.config"), "linux", dllMap, "lib{0}.so");
                 MiscUtil.ParseMonoNativeLibConfig(Path.Combine(Globals.PathOrig, "FNA.dll.config"), "linux", dllMap, "lib{0}.so");
-                dllMap.Add("libSDL2_image-2.0.so.0", "libSDL2_image.so"); // Required by EverestSplash
             } break;
             case Globals.InstallPlatform.MacOS:{
                 // Setup MacOS native libs
@@ -58,7 +57,6 @@ public static class LibAndDepHandling {
                 libDstDir = Path.Combine(Globals.PathGame, "lib64-osx");
                 MiscUtil.ParseMonoNativeLibConfig(Path.Combine(Globals.PathOrig, "Celeste.exe.config"), "osx", dllMap, "lib{0}.dylib");
                 MiscUtil.ParseMonoNativeLibConfig(Path.Combine(Globals.PathOrig, "FNA.dll.config"), "osx", dllMap, "lib{0}.dylib");
-                dllMap.Add("libSDL2_image-2.0.0.dylib", "libSDL2_image.dylib"); // Required by EverestSplash
             } break;
             default: return;
         }
