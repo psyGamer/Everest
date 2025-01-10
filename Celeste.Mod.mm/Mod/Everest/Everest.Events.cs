@@ -14,7 +14,6 @@ using _Seeker = Celeste.Seeker;
 using _AngryOshiro = Celeste.AngryOshiro;
 using _SubHudRenderer = Celeste.Mod.UI.SubHudRenderer;
 using Monocle;
-using System.ComponentModel;
 
 namespace Celeste.Mod {
     public static partial class Everest {
