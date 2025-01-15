@@ -297,10 +297,24 @@ namespace Celeste.Mod {
             public static class AssetReload {
                 public delegate void ReloadHandler(bool silent);
                 public static event ReloadHandler OnBeforeReload, OnAfterReload;
-                internal static void BeforeReload(bool silent)
-                    => OnBeforeReload?.Invoke(silent);
-                internal static void AfterReload(bool silent)
-                    => OnAfterReload?.Invoke(silent);
+
+                public static event ReloadHandler OnBeforeNextReload, OnAfterNextReload;
+
+                internal static void BeforeReload(bool silent) {
+                    OnBeforeReload?.Invoke(silent);
+                    
+                    var beforeNextReload = OnBeforeNextReload;
+                    OnBeforeNextReload = null;
+                    beforeNextReload?.Invoke(silent);
+                }
+
+                internal static void AfterReload(bool silent) {
+                    OnAfterReload?.Invoke(silent);
+                    
+                    var afterNextReload = OnAfterNextReload;
+                    OnAfterNextReload = null;
+                    afterNextReload?.Invoke(silent);
+                }
 
                 public delegate void ReloadLevelHandler(global::Celeste.Level level);
                 public static ReloadLevelHandler OnReloadLevel;
