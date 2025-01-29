@@ -758,7 +758,7 @@ namespace Celeste.Mod {
                     return fileSpan[..^4].ToString();
                 }
 
-                if (MatchExtension(fileSpan, fileNameSpan, "obj.export", ref warningAlreadySent)) {
+                if (MatchMultipartExtension(fileSpan, fileNameSpan, "obj.export", ref warningAlreadySent)) {
                     type = typeof(AssetTypeObjModelExport);
                     return fileSpan[..^7].ToString();
                 }
