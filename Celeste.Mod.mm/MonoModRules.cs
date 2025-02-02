@@ -43,6 +43,12 @@ namespace MonoMod {
     [MonoModIfFlag("Headless")]
     [MonoModCustomMethodAttribute(nameof(MonoModRules.PatchStubExtern))]
     class PatchStubExternAttribute : Attribute { }
+
+    /// <summary>
+    /// Forces NoInlining onto a given member.
+    /// </summary>
+    [MonoModCustomMethodAttribute(nameof(MonoModRules.ForceNoInlining))]
+    class ForceNoInliningAttribute : Attribute { }
 #endregion
 
     static partial class MonoModRules {
@@ -304,6 +310,10 @@ namespace MonoMod {
             static TypeReference GetEnumUnderlyingType(TypeDefinition enumType) {
                 return enumType.Fields.First(f => !f.IsStatic).FieldType;
             }
+        }
+
+        public static void ForceNoInlining(MethodDefinition method, CustomAttribute attrib) {
+            method.NoInlining = true;
         }
 
         /// <summary>
