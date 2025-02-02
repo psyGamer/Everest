@@ -777,11 +777,7 @@ namespace Celeste.Mod {
                     // we already are in the overworld. Register new Ouis real quick!
                     if (Engine.Instance != null && Engine.Scene is Overworld overworld && typeof(Oui).IsAssignableFrom(type) && !type.IsAbstract) {
                         Logger.Verbose("core", $"Instantiating UI from {meta}: {type.FullName}");
-
-                        Oui oui = (Oui) Activator.CreateInstance(type);
-                        oui.Visible = false;
-                        overworld.Add(oui);
-                        overworld.UIs.Add(oui);
+                        ((patch_Overworld) overworld).RegisterOui(type);
                     }
                 }
                 // We should run the map data processors again if new berry types are registered, so that CoreMapDataProcessor assigns them checkpoint IDs and orders.
