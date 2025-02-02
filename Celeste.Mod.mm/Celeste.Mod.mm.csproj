@@ -38,7 +38,6 @@
     <ProjectReference Include="..\external\MonoMod\src\MonoMod.Utils\MonoMod.Utils.csproj" />
     <ProjectReference Include="..\external\MonoMod\src\MonoMod.RuntimeDetour\MonoMod.RuntimeDetour.csproj" />
     <ProjectReference Include="..\external\MonoMod\src\MonoMod.RuntimeDetour.HookGen\MonoMod.RuntimeDetour.HookGen.csproj" />
-    <PackageReference Include="DotNetZip" Version="1.16.0" />
     <PackageReference Include="System.Drawing.Common" Version="7.0.0" />
     <PackageReference Include="System.ValueTuple" Version="4.5.0" />
     <PackageReference Include="YamlDotNet" Version="8.1.2" />
@@ -68,6 +67,12 @@
     </Content>
     <Content Remove="..\lib-ext\.gitignore" />
     <Content Remove="..\lib-ext\FNA3D.patch" />
+    <Content Remove="..\lib-ext\DotNetZip.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\lib-ext\DotNetZip.dll" Link="DotNetZip.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
