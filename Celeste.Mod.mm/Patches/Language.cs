@@ -51,7 +51,7 @@ namespace Celeste {
             }
             
             left = from[..idx];
-            right = from[(idx + 1)..];
+            right = from[(idx + 1)..].Trim();
             return true;
         }
         
