@@ -80,9 +80,7 @@ namespace Monocle {
             // search for entities with [TrackedAs]
             int oldVersion = TrackedTypeVersion;
             foreach (Type type in _temporaryAllTypes) {
-                object[] customAttributes = type.GetCustomAttributes(typeof(TrackedAsAttribute), inherit: false);
-                foreach (object customAttribute in customAttributes) {
-                    TrackedAsAttribute trackedAs = customAttribute as TrackedAsAttribute;
+                foreach (TrackedAsAttribute trackedAs in type.GetCustomAttributes(typeof(TrackedAsAttribute), inherit: false).Cast<TrackedAsAttribute>()) {
                     AddTypeToTracker(type, trackedAs.TrackedAsType, trackedAs.Inherited);
                 }
             }
@@ -91,42 +89,44 @@ namespace Monocle {
             _temporaryAllTypes = null;
         }
 
+        /// <summary>
+        /// Dynamically add a new type to the active scene's tracker. The <paramref name="type"/> can also be TrackedAs if <paramref name="trackedAs"/> is provided.
+        /// If <paramref name="inheritAll"/> is true, all subtypes of <paramref name="type"/> will be tracked under it.
+        /// Call <seealso cref="AddSpecificType(Type, Type, Dictionary{Type, List{Type}})"/> to add the scene's entities to the tracker after adding the type.
+        /// </summary>
+        /// <param name="type">The type to add to the Tracker</param>
+        /// <param name="trackedAs">If the type should be TrackedAs</param>
+        /// <param name="inheritAll">If all subtypes of <paramref name="type"/> should also be tracked under it</param>
         public static void AddTypeToTracker(Type type, Type trackedAs = null, bool inheritAll = false) {
             AddTypeToTracker(type, trackedAs, inheritAll ? GetSubclasses(type).ToArray() : Array.Empty<Type>());
         }
 
+        /// <summary>
+        /// Dynamically add a new type to the active scene's tracker. The <paramref name="type"/> can also be TrackedAs if <paramref name="trackedAs"/> is provided.
+        /// Any <paramref name="subtypes"/> passed will also be tracked under <paramref name="type"/>.
+        /// Call <seealso cref="AddSpecificType(Type, Type, Dictionary{Type, List{Type}})"/> to add the scene's entities to the tracker after adding the type.
+        /// </summary>
+        /// <param name="type">The type to add to the Tracker</param>
+        /// <param name="trackedAs">If the type should be TrackedAs</param>
+        /// <param name="subtypes">Any subtypes that should be tracked under <paramref name="type"/></param>
         public static void AddTypeToTracker(Type type, Type trackedAs = null, params Type[] subtypes) {
             Type trackedAsType = trackedAs != null && trackedAs.IsAssignableFrom(type) ? trackedAs : type;
-            bool? trackedEntity = typeof(Entity).IsAssignableFrom(type) ? true : typeof(Component).IsAssignableFrom(type) ? false : null;
-            if (trackedEntity == null) {
+            bool? canTrack = typeof(Entity).IsAssignableFrom(type) ? true : typeof(Component).IsAssignableFrom(type) ? false : null;
+            if (canTrack is not bool trackedEntity) {
                 // this is neither an entity nor a component. Help!
                 throw new Exception("Type '" + type.Name + "' cannot be Tracked" + (trackedAsType != type ? "As" : "") + " because it does not derive from Entity or Component");
             }
             bool updated = false;
             // copy the registered types for the target type
-            ((bool) trackedEntity ? StoredEntityTypes : StoredComponentTypes).Add(type);
-            Dictionary<Type, List<Type>> tracked = (bool) trackedEntity ? TrackedEntityTypes : TrackedComponentTypes;
-            if (!type.IsAbstract) {
-                if (!tracked.TryGetValue(type, out List<Type> value)) {
-                    value = new List<Type>();
-                    tracked.Add(type, value);
-                }
-                int cnt = value.Count;
-                value.AddRange(tracked.TryGetValue(trackedAsType, out List<Type> list) ? list : new List<Type>());
-                List<Type> result = tracked[type] = value.Distinct().ToList();
-                updated = cnt != result.Count;
+            (trackedEntity ? StoredEntityTypes : StoredComponentTypes).Add(type);
+            Dictionary<Type, List<Type>> tracked = trackedEntity ? TrackedEntityTypes : TrackedComponentTypes;
+            if (AddSpecificType(type, trackedAsType, tracked)) {
+                updated = true;
             }
             // do the same for subclasses
             foreach (Type subtype in subtypes) {
-                if (trackedAsType.IsAssignableFrom(subtype) && !subtype.IsAbstract) {
-                    if (!tracked.TryGetValue(subtype, out List<Type> value)) {
-                        value = new List<Type>();
-                        tracked.Add(subtype, value);
-                    }
-                    int cnt = value.Count;
-                    value.AddRange(tracked.TryGetValue(trackedAsType, out List<Type> list) ? list : new List<Type>());
-                    List<Type> result = tracked[subtype] = value.Distinct().ToList();
-                    updated = cnt != result.Count;
+                if (trackedAsType.IsAssignableFrom(subtype) && AddSpecificType(subtype, trackedAsType, tracked)) {
+                    updated = true;
                 }
             }
             if (updated) {
@@ -134,48 +134,62 @@ namespace Monocle {
             }
         }
 
+        private static bool AddSpecificType(Type type, Type trackedAsType, Dictionary<Type, List<Type>> tracked) {
+            if (type.IsAbstract) {
+                return false;
+            }
+            if (!tracked.TryGetValue(type, out List<Type> value)) {
+                value = new List<Type>();
+                tracked.Add(type, value);
+            }
+            int cnt = value.Count;
+            value.AddRange(tracked.TryGetValue(trackedAsType, out List<Type> list) ? list : new List<Type>());
+            List<Type> result = tracked[type] = value.Distinct().ToList();
+            return cnt != result.Count;
+        }
+
         /// <summary>
-        /// Ensures the <paramref name="toUpdate"/>'s tracker contains all entities of all tracked Types from the <paramref name="toUpdate"/>.
-        /// Must be called if a type is added to the tracker manually and if the <paramref name="toUpdate"/>'s Tracker isn't refreshed.
+        /// Ensures the <paramref name="scene"/>'s tracker contains all entities of all tracked Types from the <paramref name="scene"/>.
+        /// Must be called if a type is added to the tracker manually and if the <paramref name="scene"/>'s Tracker isn't refreshed.
         /// If called back to back without a type added to the Tracker, it won't go through again, for performance.
         /// <paramref name="force"/> will make ensure the Refresh happens, even if run back to back.
-        /// Only the <paramref name="toUpdate"/>'s Tracker's refreshed state is changed.
-        /// If <paramref name="toUpdate"/> is null, it will default to Engine.Scene.
+        /// Only the <paramref name="scene"/>'s Tracker's refreshed state is changed.
+        /// If <paramref name="scene"/> is null, it will default to Engine.Scene.
         /// </summary>
-        public static void Refresh(Scene toUpdate = null, bool force = false) {
-            Scene scene = toUpdate ?? Engine.Scene;
-            if ((scene.Tracker as patch_Tracker).currentVersion >= TrackedTypeVersion && !force) {
+        public static void Refresh(Scene scene = null, bool force = false) {
+            Scene sceneUpdate = scene ?? Engine.Scene;
+            if ((sceneUpdate.Tracker as patch_Tracker).currentVersion >= TrackedTypeVersion && !force) {
                 return;
             }
-            (scene.Tracker as patch_Tracker).currentVersion = TrackedTypeVersion;
+            (sceneUpdate.Tracker as patch_Tracker).currentVersion = TrackedTypeVersion;
             foreach (Type entityType in StoredEntityTypes) {
-                if (!scene.Tracker.Entities.ContainsKey(entityType)) {
-                    scene.Tracker.Entities.Add(entityType, new List<Entity>());
+                if (!sceneUpdate.Tracker.Entities.ContainsKey(entityType)) {
+                    sceneUpdate.Tracker.Entities.Add(entityType, new List<Entity>());
                 }
             }
             foreach (Type componentType in StoredComponentTypes) {
-                if (!scene.Tracker.Components.ContainsKey(componentType)) {
-                    scene.Tracker.Components.Add(componentType, new List<Component>());
+                if (!sceneUpdate.Tracker.Components.ContainsKey(componentType)) {
+                    sceneUpdate.Tracker.Components.Add(componentType, new List<Component>());
                 }
             }
-            foreach (Entity entity in scene.Entities) {
+            foreach (Entity entity in sceneUpdate.Entities) {
                 foreach (Component component in entity.Components) {
                     Type componentType = component.GetType();
                     if (!TrackedComponentTypes.TryGetValue(componentType, out List<Type> componentTypes)
-                        || scene.Tracker.Components[componentType].Contains(component)) {
+                        || sceneUpdate.Tracker.Components[componentType].Contains(component)) {
                         continue;
                     }
                     foreach (Type trackedType in componentTypes) {
-                        scene.Tracker.Components[trackedType].Add(component);
+                        sceneUpdate.Tracker.Components[trackedType].Add(component);
                     }
                 }
                 Type entityType = entity.GetType();
                 if (!TrackedEntityTypes.TryGetValue(entityType, out List<Type> entityTypes)
-                    || scene.Tracker.Entities[entityType].Contains(entity)) {
+                    || sceneUpdate.Tracker.Entities[entityType].Contains(entity)) {
                     continue;
                 }
                 foreach (Type trackedType in entityTypes) {
-                    scene.Tracker.Entities[trackedType].Add(entity);
+                    sceneUpdate.Tracker.Entities[trackedType].Add(entity);
                 }
             }
         }
