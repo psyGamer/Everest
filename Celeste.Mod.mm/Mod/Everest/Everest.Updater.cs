@@ -434,9 +434,12 @@ namespace Celeste.Mod {
                     }
 
                     // We have to create BuildIsXYZ.txt manually, as this "install" will never actually be run
-                    File.Delete(Path.Combine(legacyRefInstall, "BuildIsFNA.txt"));
-                    File.Delete(Path.Combine(legacyRefInstall, "BuildIsXNA.txt"));
-                    File.WriteAllText(Path.Combine(legacyRefInstall, Flags.VanillaIsFNA ? "BuildIsFNA.txt" : "BuildIsXNA.txt"), string.Empty);
+                    string correctFile = Path.Combine(legacyRefInstall, Flags.VanillaIsFNA ? "BuildIsFNA.txt" : "BuildIsXNA.txt");
+                    string wrongFile = Path.Combine(legacyRefInstall, Flags.VanillaIsFNA ? "BuildIsXNA.txt" : "BuildIsFNA.txt");
+                    if (File.Exists(wrongFile))
+                        File.Delete(wrongFile);
+                    if (!File.Exists(correctFile))
+                        File.WriteAllText(correctFile, string.Empty);
                 }), 0);
             }
 
