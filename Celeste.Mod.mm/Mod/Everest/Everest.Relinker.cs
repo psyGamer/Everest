@@ -1,4 +1,5 @@
 ﻿using Celeste.Mod.Helpers;
+using Ionic.Zip;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using MonoMod;
@@ -7,6 +8,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Loader;
+using System.Security.Cryptography;
 
 namespace Celeste.Mod {
     public static partial class Everest {

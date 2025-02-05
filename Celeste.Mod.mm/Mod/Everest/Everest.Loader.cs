@@ -2,6 +2,7 @@
 using Celeste.Mod.Core;
 using Celeste.Mod.Entities;
 using Celeste.Mod.Helpers;
+using Ionic.Zip;
 using MAB.DotIgnore;
 using Microsoft.Xna.Framework;
 using Monocle;
@@ -12,7 +13,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 
@@ -266,14 +266,14 @@ namespace Celeste.Mod {
 
                 bool metaParsed = false;
 
-                using (ZipArchive zip = ZipFile.OpenRead(archive)) {
-                    foreach (ZipArchiveEntry entry in zip.Entries) {
-                        if (entry.FullName is "everest.yaml" or "everest.yml") {
+                using (ZipFile zip = new ZipFile(archive)) {
+                    foreach (ZipEntry entry in zip.Entries) {
+                        if (entry.FileName is "everest.yaml" or "everest.yml") {
                             if (metaParsed) {
-                                Logger.Warn("loader", $"{archive} has both everest.yaml and everest.yml. Ignoring {entry.FullName}.");
+                                Logger.Warn("loader", $"{archive} has both everest.yaml and everest.yml. Ignoring {entry.FileName}.");
                                 continue;
                             }
-                            using (Stream stream = entry.Open())
+                            using (MemoryStream stream = entry.ExtractStream())
                             using (StreamReader reader = new StreamReader(stream)) {
                                 try {
                                     if (!reader.EndOfStream) {
@@ -284,17 +284,16 @@ namespace Celeste.Mod {
                                         }
                                     }
                                 } catch (Exception e) {
-                                    Logger.Warn("loader", $"Failed parsing {entry.FullName} in {archive}: {e}");
+                                    Logger.Warn("loader", $"Failed parsing {entry.FileName} in {archive}: {e}");
                                     FilesWithMetadataLoadFailures.Add(archive);
                                 }
                             }
                             metaParsed = true;
                             continue;
                         }
-                        
-                        if (entry.FullName == ".everestignore") {
+                        if (entry.FileName == ".everestignore") {
                             List<string> lines = new List<string>();
-                            using (Stream stream = entry.Open())
+                            using (MemoryStream stream = entry.ExtractStream())
                             using (StreamReader reader = new StreamReader(stream)) {
                                 while (!reader.EndOfStream) {
                                     lines.Add(reader.ReadLine());

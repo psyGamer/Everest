@@ -1,8 +1,10 @@
-﻿using System;
+﻿using Celeste.Mod.Helpers;
+using Ionic.Zip;
+using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
+using System.Threading;
 
 namespace Celeste.Mod {
     public abstract class ModAsset {
@@ -276,14 +278,46 @@ namespace Celeste.Mod {
         /// </summary>
         public readonly string Path;
 
-        public override byte[] Data => Source.GetContents(Path).ToArray();
+        /// <summary>
+        /// The entry for the source file inside the archive.
+        /// </summary>
+        public readonly ZipEntry Entry;
 
-        public ZipModAsset(ZipModContent source, string path) : base(source) {
-            Path = path;
+        private readonly ZipModContent.ZipModSecret Secret;
+
+        public override byte[] Data {
+            get {
+                using (MemoryStream ms = Entry.ExtractStream())
+                    return ms.ToArray();
+            }
+        }
+
+        public ZipModAsset(ZipModContent source, ZipModContent.ZipModSecret secret, string path)
+            : base(source) {
+            Path = path = path.Replace('\\', '/');
+            Secret = secret;
+
+            foreach (ZipEntry entry in source.Zip.Entries) {
+                if (entry.FileName.Replace('\\', '/') == path) {
+                    Entry = entry;
+                    break;
+                }
+            }
+        }
+
+        public ZipModAsset(ZipModContent source, ZipModContent.ZipModSecret secret, ZipEntry entry)
+            : base(source) {
+            Path = entry.FileName.Replace('\\', '/');
+            Secret = secret;
+            Entry = entry;
         }
 
         protected override void Open(out Stream stream, out bool isSection) {
-            stream = Source.GetContents(Path);
+            if (Entry == null)
+                throw new KeyNotFoundException($"{GetType().Name} {Path} not found in archive {Source.Path}");
+
+            // Apparently DotNetZip HATES multithreading, concurrent access and seeking.
+            stream = new ZipAssetStream(this, Secret);
             isSection = false;
         }
     }
