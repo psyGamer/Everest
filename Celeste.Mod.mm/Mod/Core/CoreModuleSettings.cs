@@ -80,7 +80,7 @@ namespace Celeste.Mod.Core {
                         Engine.Commands.Enabled = false;
                 }
 
-                ((patch_OuiMainMenu) (Engine.Scene as Overworld)?.GetUI<OuiMainMenu>())?.RebuildMainAndTitle();
+                ((patch_OuiMainMenu) (Engine.Scene as Overworld)?.GetUI<OuiMainMenu>())?.NeedsRebuild();
             }
         }
 
@@ -232,7 +232,7 @@ namespace Celeste.Mod.Core {
                 _MainMenuMode = value;
                 if (value != originalValue) {
                     // the main menu mode was changed; rebuild the main menu
-                    ((patch_OuiMainMenu) (Engine.Scene as Overworld)?.GetUI<OuiMainMenu>())?.RebuildMainAndTitle();
+                    ((patch_OuiMainMenu) (Engine.Scene as Overworld)?.GetUI<OuiMainMenu>())?.NeedsRebuild();
                 }
             }
         }
@@ -261,7 +261,7 @@ namespace Celeste.Mod.Core {
                 _WarnOnEverestYamlErrors = value;
 
                 // rebuild the main menu to make sure we show/hide the yaml error notice.
-                ((patch_OuiMainMenu) (Engine.Scene as Overworld)?.GetUI<OuiMainMenu>())?.RebuildMainAndTitle();
+                ((patch_OuiMainMenu) (Engine.Scene as Overworld)?.GetUI<OuiMainMenu>())?.NeedsRebuild();
             }
         }
 
