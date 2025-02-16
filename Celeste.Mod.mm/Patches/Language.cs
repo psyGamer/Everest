@@ -23,7 +23,7 @@ namespace Celeste {
         internal Dictionary<string, int> ReadCount;
         internal string CurrentlyReadingFrom;
 
-        [GeneratedRegex(@"^(?:\{.*?\})+$")]
+        [GeneratedRegex(@"^(?:\{[^}]*\}\s*)*$")]
         private static partial Regex WholeLineIsCommandsRegex();
 
         [GeneratedRegex(@"\{(.*?)\}", RegexOptions.RightToLeft)]
@@ -51,7 +51,7 @@ namespace Celeste {
             }
             
             left = from[..idx];
-            right = from[(idx + 1)..];
+            right = from[(idx + 1)..].Trim();
             return true;
         }
         

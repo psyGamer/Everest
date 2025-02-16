@@ -374,103 +374,35 @@ namespace Celeste.Mod {
         /// </summary>
         public readonly string Path;
 
+        private readonly ZipArchive zip;
+
         public ZipModContent(string path) {
             Path = path;
-        }
-
-        private ZipArchive SharedZip;
-        private int SharedZipUsers = 0;
-        private readonly object SharedZipLock = new object();
-        private bool disposed = false;
-
-        private readonly object ReadingLock = new object();
-
-        /// <summary>
-        /// Object granting access to a shared ZipArchive instance, keeping track of the number of usages
-        /// to dispose the shared instance once no one uses it anymore.
-        /// </summary>
-        public class ZipFileAccessor : IDisposable {
-            private ZipModContent Parent;
-
-            /// <summary>
-            /// The loaded archive containing the mod content.
-            /// </summary>
-            public ZipArchive Zip => Parent.SharedZip;
-
-            internal ZipFileAccessor(ZipModContent parent) {
-                Parent = parent;
-            }
-
-            private bool disposed = false;
-
-            public void Dispose() {
-                if (disposed) return;
-                disposed = true;
-
-                lock (Parent.SharedZipLock) {
-                    Parent.SharedZipUsers--;
-                    if (Parent.SharedZipUsers > 0) return;
-
-                    // if the file goes unused for 10 seconds, close it
-                    QueuedTaskHelper.Do("SharedZipRelease-" + Parent.Path, delay: 10, DisposeParentZip);
-                }
-            }
-
-            private void DisposeParentZip() {
-                lock (Parent.SharedZipLock) {
-                    // the task should get canceled when a new user shows up, but you never know...
-                    if (Parent.SharedZipUsers > 0) return;
-
-                    Logger.Debug("ZipModContent", $"Closing zip: {Parent.Path}");
-                    Parent.SharedZip.Dispose();
-                    Parent.SharedZip = null;
-                }
-            }
-        }
-
-        public ZipFileAccessor Open() {
-            lock (SharedZipLock) {
-                if (disposed) throw new ObjectDisposedException(nameof(ZipModContent));
-
-                if (SharedZip == null) {
-                    Logger.Debug("ZipModContent", $"Opening zip: {Path}");
-                    SharedZip = ZipFile.OpenRead(Path);
-                }
-
-                SharedZipUsers++;
-                QueuedTaskHelper.Cancel("SharedZipRelease-" + Path);
-                return new ZipFileAccessor(this);
-            }
+            zip = ZipFile.OpenRead(path);
         }
 
         protected override void Crawl() {
-            using ZipFileAccessor zip = Open();
-
-            foreach (ZipArchiveEntry entry in zip.Zip.Entries) {
-                string entryName = entry.FullName.Replace('\\', '/');
-                if (entryName.EndsWith("/")) continue;
-                Add(entryName, new ZipModAsset(this, entry.FullName));
+            lock (zip) {
+                foreach (ZipArchiveEntry entry in zip.Entries) {
+                    string entryName = entry.FullName.Replace('\\', '/');
+                    if (entryName.EndsWith("/")) continue;
+                    Add(entryName, new ZipModAsset(this, entry.FullName));
+                }
             }
         }
 
-        public MemoryStream GetContents(string path) {
-            lock (ReadingLock) {
-                using ZipFileAccessor zip = Open();
-                ZipArchiveEntry entry = zip.Zip.GetEntry(path);
+        public Stream Open(string path) {
+            lock (zip) {
+                ZipArchiveEntry entry = zip.GetEntry(path);
                 if (entry == null) throw new KeyNotFoundException($"File {path} not found in archive {Path}");
-                return entry.ExtractStream();
+                return new SynchronizedZipEntryStream(entry);
             }
         }
 
         protected override void Dispose(bool disposing) {
-            base.Dispose(disposing);
-
-            if (disposed) return;
-
-            lock (ReadingLock) {
-                disposed = true;
-                SharedZip.Dispose();
-                SharedZip = null;
+            lock (zip) {
+                base.Dispose(disposing);
+                zip.Dispose();
             }
         }
     }
@@ -714,6 +646,7 @@ namespace Celeste.Mod {
             /// Subscribe to this event to register your own custom types.
             /// </summary>
             public static event TypeGuesser OnGuessType;
+
             /// <summary>
             /// Guess the file type and format based on its path.
             /// </summary>
@@ -917,8 +850,7 @@ namespace Celeste.Mod {
                 ReadOnlySpan<char> fileName,
                 ReadOnlySpan<char> expectedExtension,
                 ref bool warningAlreadySent,
-                bool isTextBased = false)
-            {
+                bool isTextBased = false) {
                 ReadOnlySpan<char> extension = Path.GetExtension(fileName);
 
                 if (extension.IsEmpty)
@@ -979,8 +911,7 @@ namespace Celeste.Mod {
                 ReadOnlySpan<char> fileName,
                 ReadOnlySpan<char> expectedExtension,
                 ref bool warningAlreadySent,
-                bool isTextBased = false)
-            {
+                bool isTextBased = false) {
                 // use the simpler function if this is just a singlepart extension
                 if (expectedExtension.IndexOf('.') == -1)
                     return MatchExtension(filePath, fileName, expectedExtension, ref warningAlreadySent, isTextBased);
@@ -1054,6 +985,7 @@ namespace Celeste.Mod {
             /// Invoked when content is being updated, allowing you to handle it.
             /// </summary>
             public static event Action<ModAsset, ModAsset> OnUpdate;
+
             public static void Update(ModAsset prev, ModAsset next) {
                 if (prev != null) {
                     foreach (object target in prev.Targets) {
@@ -1194,6 +1126,7 @@ namespace Celeste.Mod {
             /// Invoked when content is being processed (most likely on load), allowing you to manipulate it.
             /// </summary>
             public static event Action<object, string> OnProcessLoad;
+
             /// <summary>
             /// Process an asset and register it for further reprocessing in the future.
             /// Apply any mod-related changes to the asset based on the existing mod asset meta map.
@@ -1229,6 +1162,7 @@ namespace Celeste.Mod {
             /// Invoked when content is being processed (most likely on load or runtime update), allowing you to manipulate it.
             /// </summary>
             public static event Action<object, ModAsset, bool> OnProcessUpdate;
+
             public static void ProcessUpdate(object asset, ModAsset mapping, bool load) {
                 if (asset == null || mapping == null)
                     return;

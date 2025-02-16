@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 
 namespace Celeste.Mod {
@@ -122,7 +121,7 @@ namespace Celeste.Mod {
         public bool TryGetMeta<T>(out T meta) {
             if (Everest.Content.TryGet(PathVirtual + ".meta", out ModAsset metaAsset) &&
                 metaAsset.TryDeserialize(out meta)
-            )
+                )
                 return true;
             meta = default;
             return false;
@@ -276,14 +275,21 @@ namespace Celeste.Mod {
         /// </summary>
         public readonly string Path;
 
-        public override byte[] Data => Source.GetContents(Path).ToArray();
+        public override byte[] Data {
+            get {
+                using Stream stream = Source.Open(Path);
+                using MemoryStream ms = new MemoryStream();
+                stream.CopyTo(ms);
+                return ms.ToArray();
+            }
+        }
 
         public ZipModAsset(ZipModContent source, string path) : base(source) {
             Path = path;
         }
 
         protected override void Open(out Stream stream, out bool isSection) {
-            stream = Source.GetContents(Path);
+            stream = Source.Open(Path);
             isSection = false;
         }
     }
