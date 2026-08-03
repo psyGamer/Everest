@@ -36,7 +36,7 @@ namespace Celeste.Mod.Core {
         public static CoreModuleSession Session => (CoreModuleSession) Instance._Session;
 
         private static ILHook nluaAssemblyGetTypesHook;
-        private static Hook nluaObjectTranslatorFindType;
+        private static Hook nluaObjectTranslatorFindTypeHook;
         private static Hook legacyXNAGameTickHook;
 
         public CoreModule() {
@@ -68,11 +68,19 @@ namespace Celeste.Mod.Core {
             Everest.Events.Celeste.OnExiting += FileProxyStream.DeleteDummy;
             Everest.Events.MainMenu.OnCreateButtons += CreateMainMenuButtons;
             Everest.Events.Level.OnCreatePauseMenuButtons += CreatePauseMenuButtons;
-            nluaAssemblyGetTypesHook = new ILHook(typeof(Lua).Assembly.GetType("NLua.Extensions.TypeExtensions").GetMethod("GetExtensionMethods"), patchNLuaAssemblyGetTypes);
-            nluaObjectTranslatorFindType = new Hook(typeof(ObjectTranslator).GetMethod("FindType", BindingFlags.NonPublic | BindingFlags.Instance), hookNLuaObjectTranslatorFindType);
 
-            if (Everest.CompatibilityMode == Everest.CompatMode.LegacyXNA)
-                legacyXNAGameTickHook = new Hook(typeof(Game).GetMethod("Tick"), hookLegacyXNAGameTick);
+            var assemblyGetTypes = typeof(Lua).Assembly.GetType("NLua.Extensions.TypeExtensions")!.GetMethod("GetExtensionMethods")!;
+            var objectTranslatorFindType = typeof(ObjectTranslator).GetMethod("FindType", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+            HookUtils.TryDisableInlining(assemblyGetTypes);
+            nluaAssemblyGetTypesHook = new ILHook(assemblyGetTypes, patchNLuaAssemblyGetTypes);
+            HookUtils.TryDisableInlining(objectTranslatorFindType);
+            nluaObjectTranslatorFindTypeHook = new Hook(objectTranslatorFindType, hookNLuaObjectTranslatorFindType);
+
+            if (Everest.CompatibilityMode == Everest.CompatMode.LegacyXNA) {
+                var legacyXNAGameTick = typeof(Game).GetMethod("Tick")!;
+                legacyXNAGameTickHook = new Hook(legacyXNAGameTick, hookLegacyXNAGameTick);
+            }
 
             foreach (KeyValuePair<string, LogLevel> logLevel in Settings.LogLevels) {
                 Logger.SetLogLevelFromSettings(logLevel.Key, logLevel.Value);
@@ -188,8 +196,8 @@ namespace Celeste.Mod.Core {
             Everest.Events.Level.OnCreatePauseMenuButtons -= CreatePauseMenuButtons;
             nluaAssemblyGetTypesHook?.Dispose();
             nluaAssemblyGetTypesHook = null;
-            nluaObjectTranslatorFindType?.Dispose();
-            nluaObjectTranslatorFindType = null;
+            nluaObjectTranslatorFindTypeHook?.Dispose();
+            nluaObjectTranslatorFindTypeHook = null;
             legacyXNAGameTickHook?.Dispose();
             legacyXNAGameTickHook = null;
         }

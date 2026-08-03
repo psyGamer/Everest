@@ -15,10 +15,9 @@ namespace Celeste.Mod.Helpers.LegacyMonoMod {
 
         public static void InstallHook() {
             // Hook MonoMod itself to provide backwards compat with some MonoMod crimes
-            cacheCtorHook = new Hook(
-                DynamicData_Cache.GetConstructor(new Type[] { typeof(Type) }),
-                typeof(LegacyDynamicDataCompatHooks).GetMethod(nameof(CacheCtorHook), BindingFlags.NonPublic | BindingFlags.Static)
-            );
+            var cacheCtor = DynamicData_Cache.GetConstructor(new Type[] { typeof(Type) })!;
+            HookUtils.TryDisableInlining(cacheCtor);
+            cacheCtorHook = new Hook(cacheCtor, CacheCtorHook);
         }
 
         public static void UninstallHook() {
