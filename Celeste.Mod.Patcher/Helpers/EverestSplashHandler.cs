@@ -1,3 +1,4 @@
+using Celeste.Mod.Patcher;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -7,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace Celeste.Mod {
-    public static class EverestSplashHandler {
+    internal static class EverestSplashHandler {
         // Will be null when the splash is not running
         private static Process splashProcess;
         private static NamedPipeServerStream splashPipeServerStream;
@@ -69,7 +70,7 @@ namespace Celeste.Mod {
                     if (data.Data == null || data.Data.Trim().TrimEnd('\n', '\r') == "") return;
                     Logger.Error("EverestSplash", data.Data);
                 };
-                
+
                 // Dirty fix: really make sure the splash is executable on *nix
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
                     RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) {
@@ -146,8 +147,8 @@ namespace Celeste.Mod {
                 }
                 if (splashPipeServerStream == null) return; // If the splash never ran, no-op
                 if (!splashPipeServerStreamConnection.IsCompleted // Exact same checks from `SendMessageToSplash`
-                    || !splashPipeServerStream.IsConnected 
-                    || (lastFlush != null && 
+                    || !splashPipeServerStream.IsConnected
+                    || (lastFlush != null &&
                         !lastFlush.IsCompletedSuccessfully)) {
                     Logger.Error("EverestSplash", "Could not connect to splash");
                     if (!splashProcess.HasExited) { // if it hangs up, just kill it

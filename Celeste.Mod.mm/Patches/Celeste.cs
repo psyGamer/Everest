@@ -52,40 +52,11 @@ namespace Celeste {
             if (!File.Exists(correctFile))
                 File.WriteAllText(correctFile, "");
 
-            if (args.Contains("--nolog")) {
-                MainInner(args);
-                return;
-            }
-
-            string logfile = Environment.GetEnvironmentVariable("EVEREST_LOG_FILENAME") ?? "log.txt";
-            if (!logfile.EndsWith(".txt"))
-                logfile += ".txt";
-
-            // Append to the log file which was set up by Celeste.Mod.Patcher
-            using FileStream fileStream = new(logfile, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
-            using StreamWriter fileWriter = new(fileStream, Console.OutputEncoding);
-            using LogWriter logWriter = new(Console.Out, Console.Error, fileWriter);
-
-            Logger.outWriter = logWriter.STDOUT.Stream;
-            Logger.logWriter = logWriter.File;
-
             MainInner(args);
         }
 
         private static void MainInner(string[] args) {
             AppDomain.CurrentDomain.UnhandledException += UnhandledExceptionHandler;
-
-            // Get the splash up and running asap
-            if (!Everest.Flags.IsHeadless && !args.Contains("--disable-splash") && File.Exists(Path.Combine(".", "EverestSplash", "EverestSplash.dll"))) {
-                string targetRenderer = "";
-                for (int i = 0; i < args.Length; i++) { // The splash will use the same renderer as fna
-                    if (args[i] == "--graphics" && args.Length > i + 1) {
-                        targetRenderer = args[i + 1];
-                    }
-                }
-
-                EverestSplashHandler.RunSplash(targetRenderer);
-            }
 
             try {
                 Everest.ParseArgs(args);
@@ -327,7 +298,7 @@ namespace MonoMod {
             cursor.Prev.OpCode = OpCodes.Ldstr;  // previously a pop
             cursor.Prev.Operand = "ErrorLog";
 
-            TypeDefinition logger = RulesModule.GetType("Celeste.Mod", "Logger");
+            TypeDefinition logger = MonoModRule.Modder.FindType("Celeste.Mod.Logger").Resolve();
 
             // replace the Console.WriteLine with a Logger.Error
             cursor.Index++;

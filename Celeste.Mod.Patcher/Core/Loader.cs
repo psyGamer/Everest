@@ -1,13 +1,9 @@
-using MonoMod.Utils.Cil;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Runtime.InteropServices;
-using YamlDotNet.Serialization;
 
 namespace Celeste.Mod.Patcher;
 
@@ -50,23 +46,22 @@ internal static class Loader {
     internal static string? NameWhitelist;
 
     /// <summary>
-    /// The currently loaded mod temporary blacklist.
-    /// </summary>
-    public static ReadOnlyCollection<string> TemporaryBlacklist => _TemporaryBlacklist?.AsReadOnly();
-    internal static List<string> _TemporaryBlacklist;
-
-    /// <summary>
     /// The currently loaded mod blacklist.
     /// </summary>
     public static IReadOnlyCollection<string> Blacklist => _Blacklist.ToImmutableHashSet();
-    internal static HashSet<string> _Blacklist = new HashSet<string>();
+    internal static HashSet<string> _Blacklist = new();
 
+    /// <summary>
+    /// The currently loaded mod temporary blacklist.
+    /// </summary>
+    public static ReadOnlyCollection<string>? TemporaryBlacklist => _TemporaryBlacklist?.AsReadOnly();
+    internal static List<string>? _TemporaryBlacklist;
 
     /// <summary>
     /// The currently loaded mod whitelist.
     /// </summary>
-    public static ReadOnlyCollection<string> Whitelist => _Whitelist?.AsReadOnly();
-    internal static List<string> _Whitelist;
+    public static ReadOnlyCollection<string>? Whitelist => _Whitelist?.AsReadOnly();
+    internal static List<string>? _Whitelist;
 
     public static CoreModuleSettings CoreModuleSettings = new();
 
@@ -86,31 +81,32 @@ internal static class Loader {
         Directory.CreateDirectory(PathMods = Path.Combine(PathEverest, "Mods"));
         Directory.CreateDirectory(PathCache = Path.Combine(PathMods, "Cache"));
 
+        // Load white-/blacklist
         PathBlacklist = Path.Combine(PathMods, "blacklist.txt");
         if (File.Exists(PathBlacklist)) {
-            _Blacklist = File.ReadAllLines(PathBlacklist).Select(l => (l.StartsWith("#") ? "" : l).Trim()).ToHashSet<string>();
-        } else {
-            using (StreamWriter writer = File.CreateText(PathBlacklist)) {
-                writer.WriteLine("# This is the blacklist. Lines starting with # are ignored.");
-                writer.WriteLine("# Mod folders and archives listed in this file will be disabled.");
-                writer.WriteLine("ExampleFolder");
-                writer.WriteLine("SomeMod.zip");
-            }
+            _Blacklist = File.ReadAllLines(PathBlacklist).Select(l => (l.StartsWith('#') ? "" : l).Trim()).ToHashSet();
         }
 
         if (!string.IsNullOrEmpty(NameTemporaryBlacklist)) {
             PathTemporaryBlacklist = Path.Combine(PathMods, NameTemporaryBlacklist);
             if (File.Exists(PathTemporaryBlacklist)) {
-                _TemporaryBlacklist = File.ReadAllLines(PathTemporaryBlacklist).Select(l => (l.StartsWith("#") ? "" : l).Trim()).ToList();
+                _TemporaryBlacklist = File.ReadAllLines(PathTemporaryBlacklist).Select(l => (l.StartsWith('#') ? "" : l).Trim()).ToList();
+            }
+        }
+
+        if (!string.IsNullOrEmpty(NameWhitelist)) {
+            PathWhitelist = Path.Combine(PathMods, NameWhitelist);
+            if (File.Exists(PathWhitelist)) {
+                _Whitelist = File.ReadAllLines(PathWhitelist).Select(l => (l.StartsWith('#') ? "" : l).Trim()).ToList();
             }
         }
     }
 
-    // public static bool ShouldLoadFile(string file) {
-    //     if (CoreModule.Settings.WhitelistFullOverride ?? false) {
-    //         return Whitelist != null ? Whitelist.Contains(file) : (!Blacklist.Contains(file) && (TemporaryBlacklist == null || !TemporaryBlacklist.Contains(file)));
-    //     } else {
-    //         return (Whitelist != null && Whitelist.Contains(file)) || (!Blacklist.Contains(file) && (TemporaryBlacklist == null || !TemporaryBlacklist.Contains(file)));
-    //     }
-    // }
+    private static bool ShouldLoadFile(string file) {
+        if (CoreModuleSettings.WhitelistFullOverride ?? false) {
+            return Whitelist != null ? Whitelist.Contains(file) : (!Blacklist.Contains(file) && (TemporaryBlacklist == null || !TemporaryBlacklist.Contains(file)));
+        } else {
+            return (Whitelist != null && Whitelist.Contains(file)) || (!Blacklist.Contains(file) && (TemporaryBlacklist == null || !TemporaryBlacklist.Contains(file)));
+        }
+    }
 }

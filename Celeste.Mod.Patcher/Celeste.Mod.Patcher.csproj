@@ -13,6 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Celeste.Mod.mm is for compilation, Celeste is for runtime -->
+    <InternalsVisibleTo Include="Celeste" />
+    <InternalsVisibleTo Include="Celeste.Mod.mm" />
+
     <Compile Include="..\Celeste.Mod.mm\Mod\Everest\Logger.cs" Link="Logger.cs"/>
     <Compile Include="..\Celeste.Mod.mm\Mod\Helpers\LogWriter.cs" Link="LogWriter.cs"/>
     <Compile Include="..\Celeste.Mod.mm\Mod\Helpers\LogRotationHelper.cs" Link="LogRotationHelper.cs"/>

@@ -25,8 +25,9 @@ namespace Celeste.Mod {
     /// </summary>
     internal static class BOOT {
 
+        // Called by Celeste.Mod.Patcher
         [MakeEntryPoint]
-        private static void Main(string[] args) {
+        private static void Main(string[] args, TextWriter outWriter, TextWriter logWriter) {
             try {
                 // 0.1 parses into 1 in regions using ,
                 // This also somehow sets the exception message language to English.
@@ -34,6 +35,9 @@ namespace Celeste.Mod {
                 CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
                 Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
                 Thread.CurrentThread.CurrentUICulture = CultureInfo.InvariantCulture;
+
+                Logger.outWriter = outWriter;
+                Logger.logWriter = logWriter;
 
                 // SELinux can cause weird game corruption-like symptoms when we lack the execheap permission
                 // So probe for it before continuing to boot on Linux

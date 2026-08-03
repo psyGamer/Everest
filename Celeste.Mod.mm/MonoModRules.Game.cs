@@ -83,6 +83,10 @@ namespace MonoMod {
             // Determine if this is a Steam build
             bool isSteamworks = modder.Module.AssemblyReferences.Any(a => a.Name.Contains("Steamworks"));
 
+            // Explicitly add Celeste.Mod.Patcher as a dependency,
+            // since by default it's only on Celeste.Mod.mm and not the output assembly.
+            AddAssemblyRefs(MonoModRule.Modder, GetRulesAssemblyRef("Celeste.Mod.Patcher"));
+
             // Set up game flags
             // These will be passed onto mods through InitMMFlags
             bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);

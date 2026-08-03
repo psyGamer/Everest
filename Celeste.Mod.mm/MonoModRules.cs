@@ -4,12 +4,20 @@ using MonoMod.Cil;
 using MonoMod.InlineRT;
 using MonoMod.Utils;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using ICustomAttributeProvider = Mono.Cecil.ICustomAttributeProvider;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 
 namespace MonoMod {
+    /// <summary>
+    /// Applied onto the patched assembly to easily determine the used flags by just reading the assembly.
+    /// </summary>
+    class FlagMarkerAttribute : Attribute {
+        public FlagMarkerAttribute(string key, bool value) {}
+    }
+
 #region Helper Patch Attributes
     /// <summary>
     /// Make the marked method the new entry point.
@@ -49,13 +57,13 @@ namespace MonoMod {
     /// </summary>
     [MonoModCustomMethodAttribute(nameof(MonoModRules.ForceNoInlining))]
     class ForceNoInliningAttribute : Attribute { }
-    
+
     /// <summary>
     /// Forces AggressiveInlining onto a given member. Works for methods as well as properties.
     /// </summary>
     [MonoModCustomAttribute(nameof(MonoModRules.ForceAggressiveInlining))]
     class ForceAggressiveInliningAttribute : Attribute { }
-    
+
     /// <summary>
     /// Forces the given member to be sealed. Works for methods as well as properties.
     /// </summary>=
@@ -145,6 +153,18 @@ namespace MonoMod {
             // Post process types
             foreach (TypeDefinition type in modder.Module.Types)
                 PostProcessType(modder, type);
+
+            // Apply flag marker attributes
+            var flagMarkerCtor = modder.Module.ImportReference(RulesModule.GetType($"MonoMod.{nameof(FlagMarkerAttribute)}").Methods.First(m => m.IsConstructor));
+            foreach (var pair in modder.SharedData) {
+                if (pair.Value is not bool boolValue)
+                    continue;
+
+                var attrib = new CustomAttribute(flagMarkerCtor);
+                attrib.ConstructorArguments.Add(new CustomAttributeArgument(modder.Module.TypeSystem.String, pair.Key));
+                attrib.ConstructorArguments.Add(new CustomAttributeArgument(modder.Module.TypeSystem.Boolean, boolValue));
+                modder.Module.Assembly.CustomAttributes.Add(attrib);
+            }
         }
 
         private static void PostProcessType(MonoModder modder, TypeDefinition type) {
@@ -170,6 +190,12 @@ namespace MonoMod {
 #region Commmon Helper Methods
         public static AssemblyName GetRulesAssemblyRef(string name) => Assembly.GetExecutingAssembly().GetReferencedAssemblies().First(asm => asm.Name.Equals(name));
 
+        public static void AddAssemblyRefs(MonoModder modder, AssemblyName newRef) {
+            AssemblyNameReference asmRef = new AssemblyNameReference(newRef.Name, newRef.Version);
+            modder.Log($"[Celeste.Mod.mm] Adding assembly reference to {asmRef.FullName}");
+            modder.Module.AssemblyReferences.Add(asmRef);
+            modder.MapDependency(modder.Module, asmRef);
+        }
         public static bool ReplaceAssemblyRefs(MonoModder modder, Func<AssemblyNameReference, bool> filter, AssemblyName newRef) {
             // Check if the module has a reference affected by the filter
             if (!modder.Module.AssemblyReferences.Any(filter))
@@ -178,10 +204,7 @@ namespace MonoMod {
             // Add new dependency and map it, if it not already exist
             bool hasNewRef = modder.Module.AssemblyReferences.Any(asmRef => asmRef.Name == newRef.Name);
             if (!hasNewRef) {
-                AssemblyNameReference asmRef = new AssemblyNameReference(newRef.Name, newRef.Version);
-                modder.Log($"[Celeste.Mod.mm] Adding assembly reference to {asmRef.FullName}");
-                modder.Module.AssemblyReferences.Add(asmRef);
-                modder.MapDependency(modder.Module, asmRef);
+                AddAssemblyRefs(modder, newRef);
             }
 
             // Replace old references
@@ -326,7 +349,7 @@ namespace MonoMod {
         public static void ForceNoInlining(MethodDefinition method, CustomAttribute attrib) {
             method.NoInlining = true;
         }
-        
+
         public static void ForceAggressiveInlining(ICustomAttributeProvider provider, CustomAttribute attrib) {
             switch (provider) {
                 case PropertyDefinition prop:
@@ -341,7 +364,7 @@ namespace MonoMod {
 
             provider?.CustomAttributes?.Remove(attrib);
         }
-        
+
         public static void ForceSealed(ICustomAttributeProvider provider, CustomAttribute attrib) {
             switch (provider) {
                 case PropertyDefinition prop:
@@ -352,7 +375,7 @@ namespace MonoMod {
                     method.IsFinal = true;
                     break;
             }
-            
+
             provider?.CustomAttributes?.Remove(attrib);
         }
 

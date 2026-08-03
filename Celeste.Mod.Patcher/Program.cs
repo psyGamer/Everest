@@ -28,10 +28,27 @@ internal static class Program {
         string everestPath = typeof(Program).Assembly.Location;
         Loader.PathGame = Path.GetDirectoryName(everestPath)!;
 
-        // Determine if we are using a Steam install
-        string origExe = Path.Combine(Loader.PathGame, "orig", "Celeste.exe");
-        var origModule = ModuleDefinition.ReadModule(origExe);
-        bool isSteamworks = origModule.AssemblyReferences.Any(a => a.Name.Contains("Steamworks"));
+        // Determine which MonoModRules flags were applied
+        bool isHeadless = false, isSteamworks = false;
+
+        string celesteDll = Path.Combine(Loader.PathGame, "Celeste.dll");
+        using (var celesteModule = ModuleDefinition.ReadModule(celesteDll)) {
+            foreach (var attrib in celesteModule.CustomAttributes) {
+                if (attrib.AttributeType.FullName != "MonoMod.FlagMarker") continue;
+
+                string flag = (string)attrib.ConstructorArguments[0].Value;
+                bool value = (bool)attrib.ConstructorArguments[1].Value;
+
+                switch (flag) {
+                    case "Headless":
+                        isHeadless = value;
+                        break;
+                    case "Steamworks":
+                        isSteamworks = value;
+                        break;
+                }
+            }
+        }
 
         // Launching Celeste from a shortcut can sometimes set cwd to System32 on Windows.
         if (Environment.OSVersion.Platform == PlatformID.Win32NT)
@@ -171,6 +188,18 @@ internal static class Program {
             goto Exit;
         }
 
+        // Get the splash up and running asap
+        if (!isHeadless && !args.Contains("--disable-splash") && File.Exists(Path.Combine(".", "EverestSplash", "EverestSplash.dll"))) {
+            string targetRenderer = "";
+            for (int i = 0; i < args.Length; i++) { // The splash will use the same renderer as FNA
+                if (args[i] == "--graphics" && args.Length > i + 1) {
+                    targetRenderer = args[i + 1];
+                }
+            }
+
+            EverestSplashHandler.RunSplash(targetRenderer);
+        }
+
         // Setup logging
         string logfile = Environment.GetEnvironmentVariable("EVEREST_LOG_FILENAME") ?? "log.txt";
 
@@ -228,6 +257,10 @@ internal static class Program {
 
         if (args.Contains("--nolog")) {
             Process();
+
+            // Hand execution over to Everest
+            var gameAsm = Assembly.LoadFrom(Path.Combine(Loader.PathGame, "Celeste.dll"));
+            gameAsm.EntryPoint!.Invoke(null, [args, null, null]);
         } else {
             using FileStream fileStream = new(logfile, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
             using StreamWriter fileWriter = new(fileStream, Console.OutputEncoding);
@@ -242,11 +275,11 @@ internal static class Program {
             }
 
             Process();
-        }
 
-        // Hand execution over to Everest
-        var gameAsm = Assembly.LoadFrom(Path.Combine(Loader.PathGame, "Celeste.dll"));
-        gameAsm.EntryPoint!.Invoke(null, [args]);
+            // Hand execution over to Everest
+            var gameAsm = Assembly.LoadFrom(Path.Combine(Loader.PathGame, "Celeste.dll"));
+            gameAsm.EntryPoint!.Invoke(null, [args, Logger.outWriter, Logger.logWriter]);
+        }
 
         // Needed because certain graphics drivers and native libs like to hang around for no reason.
         // Vanilla does the same on macOS and Linux, but NVIDIA on Linux likes to waste time in DrvValidateVersion.
@@ -364,8 +397,6 @@ internal static class Program {
     }
 
     private static void Process() {
-        Logger.Info("hihi", ":3");
         Loader.Load();
-        Logger.Error("haha", ":3");
     }
 }

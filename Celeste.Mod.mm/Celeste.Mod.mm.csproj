@@ -88,6 +88,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Celeste.Mod.HookGen\Celeste.Mod.HookGen.csproj" />
+    <ProjectReference Include="..\Celeste.Mod.Patcher\Celeste.Mod.Patcher.csproj" />
     <ProjectReference Include="..\DiscordGameSDK\DiscordGameSDK.csproj" />
     <ProjectReference Include="..\NETCoreifier\NETCoreifier.csproj" />
     <ProjectReference Include="..\EverestSplash\EverestSplash.csproj" /> <!-- Forces correct build dependency order -->

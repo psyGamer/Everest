@@ -5,6 +5,8 @@ namespace Celeste.Mod.Patcher;
 // Stripped down version of the actual one from Celeste.Mod.mm
 // It can't be included directly, due to references to both Celeste and FNA
 internal sealed class CoreModuleSettings {
+    public bool? WhitelistFullOverride { get; set; } = null;
+
     public CompatMode CompatibilityMode { get; set; } = CompatMode.None;
     public bool D3D11UseExclusiveFullscreen { get; set; }
 
