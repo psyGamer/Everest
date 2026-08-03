@@ -3,7 +3,6 @@ using Celeste.Mod.Helpers;
 using Celeste.Mod.Helpers.LegacyMonoMod;
 using Celeste.Mod.Registry;
 using Celeste.Mod.UI;
-using Microsoft.Xna.Framework;
 using Monocle;
 using MonoMod.RuntimeDetour;
 using MonoMod.Utils;
@@ -305,7 +304,7 @@ namespace Celeste.Mod {
                 else if (arg == "--use-scancodes") {
                     Environment.SetEnvironmentVariable("FNA_KEYBOARD_USE_SCANCODES", "1");
                 }
-                
+
                 else if (arg == "--no-game-checksum")
                     Relinker.SkipGameChecksum = true;
             }

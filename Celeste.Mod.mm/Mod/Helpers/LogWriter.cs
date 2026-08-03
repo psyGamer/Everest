@@ -3,7 +3,16 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
+// Keep the types between runtime and patcher distinct, without copy-pasting
+#if EVEREST_MONOMOD
 namespace Celeste.Mod.Helpers {
+#elif EVEREST_PATCHER
+namespace Celeste.Mod.Patcher {
+#elif EVEREST_MINIINSTALLER
+namespace MiniInstaller {
+#else
+#error "Unsupported project"
+#endif
     public class LogWriter : IDisposable {
 
         public OutputStreamCapture STDOUT;

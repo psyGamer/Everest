@@ -280,6 +280,7 @@ namespace Celeste.Mod.Core {
                     Logger.Error("core", "Failed to enable Windows VT support!");
                 }
                 _ColorizedLogging = value;
+                Logger.EnableColorizedLogging = value;
             }
         }
 
@@ -311,7 +312,7 @@ namespace Celeste.Mod.Core {
 
         [SettingIgnore]
         public int DebugRCPort { get; set; } = 32270;
-        
+
         [SettingIgnore]
         [EditorBrowsable(EditorBrowsableState.Never)]
         // This option is exclusively used internally; do not use it in mods. Use AllowDistort instead.
@@ -323,7 +324,7 @@ namespace Celeste.Mod.Core {
         /// </summary>
         [SettingIgnore]
         [YamlIgnore]
-        public bool AllowDistort => !Settings.Instance.DisableFlashes || PhotosensitivityDistortOverride; 
+        public bool AllowDistort => !Settings.Instance.DisableFlashes || PhotosensitivityDistortOverride;
 
         [SettingIgnore]
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -362,7 +363,7 @@ namespace Celeste.Mod.Core {
         /// </summary>
         [SettingIgnore]
         [YamlIgnore]
-        public bool AllowScreenFlash => !Settings.Instance.DisableFlashes || PhotosensitivityScreenFlashOverride; 
+        public bool AllowScreenFlash => !Settings.Instance.DisableFlashes || PhotosensitivityScreenFlashOverride;
 
         [SettingIgnore]
         [EditorBrowsable(EditorBrowsableState.Never)]

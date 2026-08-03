@@ -184,7 +184,7 @@ namespace Celeste.Mod {
                     .Select(Path.GetFileName)
                     .Where(file => file.EndsWith(".zip") && ShouldLoadFile(file))
                     .ToArray();
-                   
+
                 string[] dirs = Directory
                     .GetDirectories(PathMods)
                     .OrderBy(f => f) //Prevent inode loading jank
@@ -294,7 +294,7 @@ namespace Celeste.Mod {
                             metaParsed = true;
                             continue;
                         }
-                        
+
                         if (entry.FullName == ".everestignore") {
                             List<string> lines = new List<string>();
                             using (Stream stream = entry.Open())
@@ -604,7 +604,7 @@ namespace Celeste.Mod {
                                         entity.SourceData = entityData;
                                         entity.SourceId = entityId;
                                     }
-                                    
+
                                     return entity;
                                 };
                                 goto RegisterEntityLoader;
@@ -617,7 +617,7 @@ namespace Celeste.Mod {
                                     var entity = (patch_Entity) ctor.Invoke(new object[] { entityData, offset, entityId });
                                     entity.SourceData = entityData;
                                     entity.SourceId = entityId;
-                                    
+
                                     return entity;
                                 };
                                 goto RegisterEntityLoader;
@@ -629,7 +629,7 @@ namespace Celeste.Mod {
                                     var entity = (patch_Entity)ctor.Invoke(new object[] { entityData, offset });
                                     entity.SourceData = entityData;
                                     entity.SourceId = ((patch_Level)level).CreateEntityId(levelData, entityData);
-                                    
+
                                     return entity;
                                 };
                                 goto RegisterEntityLoader;
@@ -668,7 +668,7 @@ namespace Celeste.Mod {
                             if (ctor != null) {
                                 EntityRegistry.RegisterSidToTypeConnection(id, ctor.DeclaringType);
                             }
-                            
+
                             patch_Level.EntityLoaders[id] = loader;
                         }
                     }

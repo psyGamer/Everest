@@ -6,11 +6,17 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
-using Celeste.Mod.Core;
-using Celeste.Mod.Helpers;
 using System.Globalization;
 
+// Keep the types between runtime and patcher distinct, without copy-pasting
+#if EVEREST_MONOMOD
+using Celeste.Mod.Helpers;
 namespace Celeste.Mod {
+#elif EVEREST_PATCHER
+namespace Celeste.Mod.Patcher {
+#else
+#error "Unsupported project"
+#endif
     public static class Logger {
 
         // Console.Out will get mirrored to the log file, however we need to write to the log file ourselves,
@@ -18,16 +24,13 @@ namespace Celeste.Mod {
         internal static TextWriter outWriter;
         internal static TextWriter logWriter;
 
-        // During the duration from startup until the core module is initialized, this value will be used as a fallback.
-        // It's initialized from BOOT.cs
-        internal static bool earlyBootColorizedLogging;
-
         private static Dictionary<string, LogLevel> minimumLevels = new Dictionary<string, LogLevel>();
         private static Dictionary<string, LogLevel> minimumLevelsFromEverestSettings = new Dictionary<string, LogLevel>();
         private static Dictionary<string, LogLevel> minimumLevelsCache = new Dictionary<string, LogLevel>();
         private static readonly object locker = new object();
 
-        private static bool ColorizedLogging => (((CoreModuleSettings) CoreModule.Instance?._Settings)?.ColorizedLogging ?? earlyBootColorizedLogging) && outWriter != null && logWriter != null;
+        internal static bool EnableColorizedLogging;
+        private static bool ColorizedLogging => EnableColorizedLogging && outWriter != null && logWriter != null;
 
         /// <summary>
         /// Sets the minimum log level to be written in the logs for lines matching the given tag prefix.
@@ -106,15 +109,15 @@ namespace Celeste.Mod {
         /// <param name="str">The string / message to log.</param>
         public static void Verbose(string tag, string str)
             => Log(LogLevel.Verbose, tag, str);
-        
+
         /// <inheritdoc cref="Verbose(string,string)"/>
-        public static void Verbose(string tag, 
+        public static void Verbose(string tag,
             [InterpolatedStringHandlerArgument(nameof(tag))] LogInterpolatedStringHandler<LogLevelConstTypes.Verbose> str)
         {
             if (str.ShouldLog)
                 LogUnchecked(LogLevel.Verbose, tag, str.ToStringAndClear());
         }
-        
+
         /// <summary>
         /// Log a string to the console and to log.txt, using <see cref="LogLevel.Debug"/>
         /// </summary>
@@ -122,15 +125,15 @@ namespace Celeste.Mod {
         /// <param name="str">The string / message to log.</param>
         public static void Debug(string tag, string str)
             => Log(LogLevel.Debug, tag, str);
-        
+
         /// <inheritdoc cref="Debug(string,string)"/>
-        public static void Debug(string tag, 
+        public static void Debug(string tag,
             [InterpolatedStringHandlerArgument(nameof(tag))] LogInterpolatedStringHandler<LogLevelConstTypes.Debug> str)
         {
             if (str.ShouldLog)
                 LogUnchecked(LogLevel.Debug, tag, str.ToStringAndClear());
         }
-        
+
         /// <summary>
         /// Log a string to the console and to log.txt, using <see cref="LogLevel.Info"/>
         /// </summary>
@@ -138,15 +141,15 @@ namespace Celeste.Mod {
         /// <param name="str">The string / message to log.</param>
         public static void Info(string tag, string str)
             => Log(LogLevel.Info, tag, str);
-        
+
         /// <inheritdoc cref="Info(string,string)"/>
-        public static void Info(string tag, 
+        public static void Info(string tag,
             [InterpolatedStringHandlerArgument(nameof(tag))] LogInterpolatedStringHandler<LogLevelConstTypes.Info> str)
         {
             if (str.ShouldLog)
                 LogUnchecked(LogLevel.Info, tag, str.ToStringAndClear());
         }
-        
+
         /// <summary>
         /// Log a string to the console and to log.txt, using <see cref="LogLevel.Warn"/>
         /// </summary>
@@ -154,15 +157,15 @@ namespace Celeste.Mod {
         /// <param name="str">The string / message to log.</param>
         public static void Warn(string tag, string str)
             => Log(LogLevel.Warn, tag, str);
-        
+
         /// <inheritdoc cref="Warn(string,string)"/>
-        public static void Warn(string tag, 
+        public static void Warn(string tag,
             [InterpolatedStringHandlerArgument(nameof(tag))] LogInterpolatedStringHandler<LogLevelConstTypes.Warn> str)
         {
             if (str.ShouldLog)
                 LogUnchecked(LogLevel.Warn, tag, str.ToStringAndClear());
         }
-        
+
         /// <summary>
         /// Log a string to the console and to log.txt, using <see cref="LogLevel.Error"/>
         /// </summary>
@@ -170,9 +173,9 @@ namespace Celeste.Mod {
         /// <param name="str">The string / message to log.</param>
         public static void Error(string tag, string str)
             => Log(LogLevel.Error, tag, str);
-        
+
         /// <inheritdoc cref="Error(string,string)"/>
-        public static void Error(string tag, 
+        public static void Error(string tag,
             [InterpolatedStringHandlerArgument(nameof(tag))] LogInterpolatedStringHandler<LogLevelConstTypes.Error> str)
         {
             if (str.ShouldLog)
@@ -186,9 +189,9 @@ namespace Celeste.Mod {
         /// <param name="str">The string / message to log.</param>
         public static void Log(string tag, string str)
             => Verbose(tag, str);
-        
+
         /// <inheritdoc cref="Log(string,string)"/>
-        public static void Log(string tag, 
+        public static void Log(string tag,
             [InterpolatedStringHandlerArgument(nameof(tag))] LogInterpolatedStringHandler<LogLevelConstTypes.Verbose> str)
         {
             if (str.ShouldLog)
@@ -206,9 +209,9 @@ namespace Celeste.Mod {
                 LogUnchecked(level, tag, str);
             }
         }
-        
+
         /// <inheritdoc cref="Log(LogLevel,string,string)"/>
-        public static void Log(LogLevel level, string tag, 
+        public static void Log(LogLevel level, string tag,
             [InterpolatedStringHandlerArgument(nameof(level), nameof(tag))] LogInterpolatedStringHandler str)
         {
             if (str.ShouldLog)
@@ -346,7 +349,7 @@ namespace Celeste.Mod {
             }
             return false;
         }
-        
+
         /// <summary>
         /// Interpolated String Handler used by the logger to avoid interpolating the string if the message won't get logged anyway.
         /// </summary>
@@ -354,9 +357,9 @@ namespace Celeste.Mod {
         public ref struct LogInterpolatedStringHandler
         {
             DefaultInterpolatedStringHandler _handler;
-            
+
             public bool ShouldLog { get; }
-            
+
             public LogInterpolatedStringHandler(int literalLength, int formattedCount, LogLevel level, string tag, out bool shouldLog)
             {
                 ShouldLog = shouldLog = Logger.shouldLog(tag, level);
@@ -370,23 +373,23 @@ namespace Celeste.Mod {
             public void AppendLiteral(string txt) => _handler.AppendLiteral(txt);
 
             public void AppendFormatted<T>(T value) => _handler.AppendFormatted(value);
-            
+
             public void AppendFormatted<T>(T value, string format) => _handler.AppendFormatted(value, format);
-            
+
             public void AppendFormatted<T>(T value, int alignment) => _handler.AppendFormatted(value, alignment);
-            
+
             public void AppendFormatted<T>(T value, int alignment, string format) => _handler.AppendFormatted(value, alignment, format);
-            
+
             public void AppendFormatted(scoped ReadOnlySpan<char> value) => _handler.AppendFormatted(value);
-            
+
             public void AppendFormatted(scoped ReadOnlySpan<char> value, int alignment, string format = null) =>
                 _handler.AppendFormatted(value, alignment, format);
-            
+
             public void AppendFormatted(string value) => _handler.AppendFormatted(value);
-            
+
             public void AppendFormatted(string value, int alignment, string format = null) => _handler.AppendFormatted(value, alignment, format);
         }
-        
+
         // Unfortunately, it is impossible to pass constants as a parameter to InterpolatedStringHandlers afaik,
         // so we need a different way to pass the log level - const generics seem like the only way unfortunately.
         /// <inheritdoc cref="LogInterpolatedStringHandler"/>
@@ -394,9 +397,9 @@ namespace Celeste.Mod {
         public ref struct LogInterpolatedStringHandler<TLevel> where TLevel : struct, IConst<LogLevel>
         {
             DefaultInterpolatedStringHandler _handler;
-            
+
             public bool ShouldLog { get; }
-            
+
             public LogInterpolatedStringHandler(int literalLength, int formattedCount, string tag, out bool shouldLog)
             {
                 shouldLog = Logger.shouldLog(tag, TLevel.Value);
@@ -405,26 +408,26 @@ namespace Celeste.Mod {
                 if (shouldLog)
                     _handler = new DefaultInterpolatedStringHandler(literalLength, formattedCount);
             }
-            
+
             internal string ToStringAndClear() => _handler.ToStringAndClear();
 
             public void AppendLiteral(string txt) => _handler.AppendLiteral(txt);
 
             public void AppendFormatted<T>(T value) => _handler.AppendFormatted(value);
-            
+
             public void AppendFormatted<T>(T value, string format) => _handler.AppendFormatted(value, format);
-            
+
             public void AppendFormatted<T>(T value, int alignment) => _handler.AppendFormatted(value, alignment);
-            
+
             public void AppendFormatted<T>(T value, int alignment, string format) => _handler.AppendFormatted(value, alignment, format);
 
             public void AppendFormatted(scoped ReadOnlySpan<char> value) => _handler.AppendFormatted(value);
-            
+
             public void AppendFormatted(scoped ReadOnlySpan<char> value, int alignment, string format = null) =>
                 _handler.AppendFormatted(value, alignment, format);
-            
+
             public void AppendFormatted(string value) => _handler.AppendFormatted(value);
-            
+
             public void AppendFormatted(string value, int alignment, string format = null) => _handler.AppendFormatted(value, alignment, format);
         }
     }
@@ -478,22 +481,22 @@ namespace Celeste.Mod {
         {
             public static LogLevel Value => LogLevel.Verbose;
         }
-        
+
         public struct Debug : IConst<LogLevel>
         {
             public static LogLevel Value => LogLevel.Debug;
         }
-        
+
         public struct Info : IConst<LogLevel>
         {
             public static LogLevel Value => LogLevel.Info;
         }
-        
+
         public struct Warn : IConst<LogLevel>
         {
             public static LogLevel Value => LogLevel.Warn;
         }
-        
+
         public struct Error : IConst<LogLevel>
         {
             public static LogLevel Value => LogLevel.Error;

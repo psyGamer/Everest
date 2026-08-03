@@ -8,6 +8,8 @@
     <OutputType>Exe</OutputType>
     <LangVersion>11</LangVersion>
     <UseAppHost>false</UseAppHost> <!-- MiniInstaller will create its own AppHosts -->
+
+    <DefineConstants>$(DefineConstants);EVEREST_MINIINSTALLER</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

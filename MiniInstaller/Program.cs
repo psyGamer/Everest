@@ -124,7 +124,7 @@ namespace MiniInstaller {
                 File.Copy(tempCelesteXml, Path.ChangeExtension(Globals.PathCelesteExe, ".xml")!, overwrite: true);
 
                 string patcherPath = Path.Combine(Globals.PathGame, "Celeste.Mod.Patcher.dll");
-                LibAndDepHandling.CreateRuntimeConfigFiles(patcherPath, new string[] { everestModDLL, hookGenOutput });
+                LibAndDepHandling.CreateRuntimeConfigFiles(patcherPath, new string[] { Globals.PathEverestDLL, everestModDLL, hookGenOutput });
                 LibAndDepHandling.SetupAppHosts(Globals.PathCelesteExe, patcherPath, Globals.PathEverestDLL);
 
                 Directory.Delete(Globals.PathMiniInstallerWorkspace, recursive: true);
@@ -242,7 +242,7 @@ namespace MiniInstaller {
                     // And assembly references changing is also a rare occasion, so skip it as well
                     if (doAppHost) {
                         string patcherPath = Path.Combine(Globals.PathGame, "Celeste.Mod.Patcher.dll");
-                        LibAndDepHandling.CreateRuntimeConfigFiles(patcherPath, new string[] { everestModDLL, hookGenOutput });
+                        LibAndDepHandling.CreateRuntimeConfigFiles(patcherPath, new string[] { Globals.PathEverestDLL, everestModDLL, hookGenOutput });
                         LibAndDepHandling.SetupAppHosts(Globals.PathCelesteExe, patcherPath, Globals.PathEverestDLL);
                     }
 

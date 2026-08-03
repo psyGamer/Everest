@@ -5,7 +5,14 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 
+// Keep the types between runtime and patcher distinct, without copy-pasting
+#if EVEREST_MONOMOD
 namespace Celeste.Mod.Helpers {
+#elif EVEREST_PATCHER
+namespace Celeste.Mod.Patcher {
+#else
+#error "Unsupported project"
+#endif
     public static class LogRotationHelper {
         public class OldestFirst : IComparer<string> {
             public int Compare(string first, string second) {

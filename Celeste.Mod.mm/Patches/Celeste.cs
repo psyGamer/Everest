@@ -52,151 +52,24 @@ namespace Celeste {
             if (!File.Exists(correctFile))
                 File.WriteAllText(correctFile, "");
 
-            if (File.Exists("everest-launch.txt")) {
-                args =
-                    File.ReadAllLines("everest-launch.txt")
-                    .Select(l => l.Trim())
-                    .Where(l => !l.StartsWith("#"))
-                    .SelectMany(l => l.Split(' '))
-                    .Concat(args)
-                    .ToArray();
-            } else {
-                using (StreamWriter writer = File.CreateText("everest-launch.txt")) {
-                    writer.WriteLine("# Add any Everest launch flags here.");
-                    writer.WriteLine("# Lines starting with # are ignored.");
-                    writer.WriteLine("# All options here are disabled by default.");
-                    writer.WriteLine("# Full list: https://github.com/EverestAPI/Resources/wiki/Command-Line-Arguments");
-                    writer.WriteLine();
-                    writer.WriteLine("# Windows only: open a separate log console window.");
-                    writer.WriteLine("#--console");
-                    writer.WriteLine();
-                    writer.WriteLine("# FNA only: force OpenGL (might be necessary to bypass a load crash on some PCs).");
-                    writer.WriteLine("#--graphics OpenGL");
-                    writer.WriteLine();
-                    writer.WriteLine("# Change default log level (verbose will print all logs).");
-                    writer.WriteLine("#--loglevel verbose");
-
-                    if (File.Exists("launch.txt")) {
-                        using (StreamReader reader = File.OpenText("launch.txt")) {
-                            writer.WriteLine();
-                            writer.WriteLine();
-                            writer.WriteLine("# The following options are migrated from the old launch.txt and force-disabled.");
-                            writer.WriteLine("# Some of them might not work anymore or cause unwanted effects.");
-                            writer.WriteLine();
-                            writer.WriteLine();
-                            for (string line; (line = reader.ReadLine()) != null;) {
-                                writer.Write("#");
-                                writer.WriteLine(line);
-                            }
-                        }
-                        File.Delete("launch.txt");
-                    }
-                }
-            }
-
-            if (File.Exists("everest-env.txt")) {
-                foreach (string line in File.ReadAllLines("everest-env.txt")) {
-                    if (line.StartsWith("#"))
-                        continue;
-
-                    int index = line.IndexOf('=');
-                    if (index == -1)
-                        continue;
-
-                    string key = line.Substring(0, index).Trim();
-                    if (key.StartsWith("'") && key.EndsWith("'"))
-                        key = key.Substring(1, key.Length - 2);
-
-                    string value = line.Substring(index + 1).Trim();
-                    if (value.StartsWith("'") && value.EndsWith("'"))
-                        value = value.Substring(1, value.Length - 2);
-
-                    if (key.EndsWith("!")) {
-                        key = key.Substring(0, key.Length - 1);
-                    } else {
-                        value = value
-                            .Replace("\\r", "\r")
-                            .Replace("\\n", "\n")
-                            .Replace($"${{{key}}}", Environment.GetEnvironmentVariable(key) ?? "");
-                    }
-
-                    Environment.SetEnvironmentVariable(key, value);
-                }
-            }
-
-            bool allocedConsole = false;
-            if (args.Contains("--console") && RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
-                AllocConsole();
-
-                // Invalidate console streams
-                typeof(Console).GetField("s_in", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, null);
-                typeof(Console).GetField("s_out", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, null);
-                typeof(Console).GetField("s_error", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, null);
-
-                allocedConsole = true;
-            }
-
             if (args.Contains("--nolog")) {
                 MainInner(args);
                 return;
             }
 
             string logfile = Environment.GetEnvironmentVariable("EVEREST_LOG_FILENAME") ?? "log.txt";
+            if (!logfile.EndsWith(".txt"))
+                logfile += ".txt";
 
-            // Only applying log rotation on default name, feel free to improve LogRotationHelper to deal with custom log file names...
-            if (logfile == "log.txt" && File.Exists("log.txt")) {
-                if (new FileInfo("log.txt").Length > 0) {
-                    // move the old log.txt to the LogHistory folder.
-                    // note that the cleanup will only be done when the core module is loaded: the settings aren't even loaded right now,
-                    // so we don't know how many files we should keep.
-                    if (!Directory.Exists("LogHistory")) {
-                        Directory.CreateDirectory("LogHistory");
-                    }
-                    File.Move("log.txt", Path.Combine("LogHistory", LogRotationHelper.GetFileNameByDate(File.GetLastWriteTime("log.txt"))));
-                } else {
-                    // log is empty! (this actually happens more often than you'd think, because of Steam re-opening Celeste)
-                    // just delete it.
-                    File.Delete("log.txt");
-                }
-            } else {
-                // check if log filename is allowed
-                Regex regexBadCharacter = new Regex("[" + Regex.Escape(new string(Path.GetInvalidFileNameChars())) + "]");
-                Match match = regexBadCharacter.Match(logfile);
+            // Append to the log file which was set up by Celeste.Mod.Patcher
+            using FileStream fileStream = new(logfile, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+            using StreamWriter fileWriter = new(fileStream, Console.OutputEncoding);
+            using LogWriter logWriter = new(Console.Out, Console.Error, fileWriter);
 
-                if (match.Success) {
-                    StringBuilder errorText = new StringBuilder($"Custom log filename set in EVEREST_LOG_FILENAME=\"{logfile}\" contains invalid character(s): ", 100);
+            Logger.outWriter = logWriter.STDOUT.Stream;
+            Logger.logWriter = logWriter.File;
 
-                    while (match.Success) {
-                        foreach (Capture c in match.Groups[0].Captures)
-                            errorText.Append(c);
-
-                        match = match.NextMatch();
-                        if (match.Success)
-                            errorText.Append(" ");
-                    }
-
-                    throw new ArgumentException(errorText.ToString());
-                }
-
-                if (!logfile.EndsWith(".txt"))
-                    logfile += ".txt";
-            }
-
-            Everest.PathLog = logfile;
-
-            using (Stream fileStream = new FileStream(logfile, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
-            using (StreamWriter fileWriter = new StreamWriter(fileStream, Console.OutputEncoding))
-            using (LogWriter logWriter = new LogWriter(Console.Out, Console.Error, fileWriter)) {
-                Logger.outWriter = logWriter.STDOUT.Stream;
-                Logger.logWriter = logWriter.File;
-
-                // Setup Windows VT support as early as possible, to avoid escape codes being printed
-                if (allocedConsole && Logger.earlyBootColorizedLogging && !Logger.TryEnableWindowsVTSupport()) {
-                    Logger.Error("core", "Failed to enable Windows VT support!");
-                }
-
-                MainInner(args);
-            }
+            MainInner(args);
         }
 
         private static void MainInner(string[] args) {
@@ -295,9 +168,6 @@ https://discord.gg/6qjaePQ");
             if (!_CriticalFailureIsUnhandledException)
                 Environment.Exit(-1);
         }
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool AllocConsole();
 
         // Patching constructors is ugly.
         public extern void orig_ctor_Celeste();
