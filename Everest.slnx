@@ -5,6 +5,7 @@
 
   <Project Path="Celeste.Mod.mm/Celeste.Mod.mm.csproj" />
   <Project Path="Celeste.Mod.HookGen/Celeste.Mod.HookGen.csproj" />
+  <Project Path="Celeste.Mod.Patcher/Celeste.Mod.Patcher.csproj" />
   <Project Path="EverestSplash/EverestSplash.csproj" />
   <Project Path="MiniInstaller/MiniInstaller.csproj" />
   <Project Path="NETCoreifier/NETCoreifier.csproj" />

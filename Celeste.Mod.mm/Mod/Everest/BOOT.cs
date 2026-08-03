@@ -11,6 +11,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 using System.Runtime.Versioning;
@@ -35,6 +36,15 @@ namespace Celeste.Mod {
                 Thread.CurrentThread.CurrentUICulture = CultureInfo.InvariantCulture;
 
                 string everestPath = typeof(Celeste).Assembly.Location;
+
+                if (Assembly.GetCallingAssembly().Location == everestPath) {
+                    // We have been launched manually, bypassing the patcher
+                    // Restart to go though it instead
+                    Console.WriteLine("Restarting through native AppHost...");
+                    Process proc = StartCelesteProcess(clearFNAEnv: false);
+                    proc.WaitForExit();
+                    Environment.Exit(proc.ExitCode);
+                }
 
                 // Launching Celeste.exe from a shortcut can sometimes set cwd to System32 on Windows.
                 if (Environment.OSVersion.Platform == PlatformID.Win32NT)
@@ -272,7 +282,7 @@ namespace Celeste.Mod {
                 Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", null);
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
                 Environment.SetEnvironmentVariable("DYLD_LIBRARY_PATH", null);
-            
+
             // Don't clear FNA vars to preserve FNA compat mode
             StartCelesteProcess(Path.Combine(AppContext.BaseDirectory, "orig"), clearFNAEnv: false);
         }

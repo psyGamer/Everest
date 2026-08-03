@@ -28,7 +28,7 @@ namespace MiniInstaller {
                 // setting up paths failed (Celeste.exe was not found).
                 return false;
             }
-            
+
             Globals.DetermineInstallPlatform();
 
             // .NET hates it when strong-named dependencies get updated.
@@ -88,7 +88,6 @@ namespace MiniInstaller {
                 string moddedCeleste = Path.Combine(Globals.PathMiniInstallerWorkspace, "Celeste.dll");
                 string moddedFNA = Path.Combine(Globals.PathMiniInstallerWorkspace, "FNA.dll");
                 string hookGenTempOutput = Path.Combine(Globals.PathMiniInstallerWorkspace, "MMHOOK_" + Path.ChangeExtension(Path.GetFileName(Globals.PathCelesteExe), ".dll"));
-                string tempAppHost = Path.ChangeExtension(moddedCeleste, ".exe");
 
                 DepCalls.LoadModders();
 
@@ -123,8 +122,10 @@ namespace MiniInstaller {
                 MiscUtil.MoveExecutable(hookGenTempOutput, hookGenOutput);
                 MiscUtil.MoveExecutable(moddedCeleste, Globals.PathEverestDLL);
                 File.Copy(tempCelesteXml, Path.ChangeExtension(Globals.PathCelesteExe, ".xml")!, overwrite: true);
-                LibAndDepHandling.CreateRuntimeConfigFiles(Globals.PathEverestDLL, new string[] { everestModDLL, hookGenOutput });
-                LibAndDepHandling.SetupAppHosts(Globals.PathCelesteExe, Globals.PathEverestDLL, Globals.PathEverestDLL);
+
+                string patcherPath = Path.Combine(Globals.PathGame, "Celeste.Mod.Patcher.dll");
+                LibAndDepHandling.CreateRuntimeConfigFiles(patcherPath, new string[] { everestModDLL, hookGenOutput });
+                LibAndDepHandling.SetupAppHosts(Globals.PathCelesteExe, patcherPath, Globals.PathEverestDLL);
 
                 Directory.Delete(Globals.PathMiniInstallerWorkspace, recursive: true);
 
@@ -240,8 +241,9 @@ namespace MiniInstaller {
                     // There's usually no reason to do this more than once ever, so don't unless explicitly told
                     // And assembly references changing is also a rare occasion, so skip it as well
                     if (doAppHost) {
-                        LibAndDepHandling.CreateRuntimeConfigFiles(Globals.PathEverestDLL, new string[] { everestModDLL, hookGenOutput });
-                        LibAndDepHandling.SetupAppHosts(Globals.PathCelesteExe, Globals.PathEverestDLL, Globals.PathEverestDLL);
+                        string patcherPath = Path.Combine(Globals.PathGame, "Celeste.Mod.Patcher.dll");
+                        LibAndDepHandling.CreateRuntimeConfigFiles(patcherPath, new string[] { everestModDLL, hookGenOutput });
+                        LibAndDepHandling.SetupAppHosts(Globals.PathCelesteExe, patcherPath, Globals.PathEverestDLL);
                     }
 
                     // Combining xml docs is slow, and most of the time not even required
