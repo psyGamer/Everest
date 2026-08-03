@@ -76,6 +76,8 @@ namespace Celeste.Mod {
             internal static HashSet<string> FilesWithMetadataLoadFailures = new HashSet<string>();
             internal static HashSet<EverestModuleMetadata> ModsWithAssemblyLoadFailures = new HashSet<EverestModuleMetadata>();
 
+            internal static HashSet<EverestModuleConfig.MethodIdentifier> PreventInlining = new();
+
             internal static readonly Version _VersionInvalid = new Version(int.MaxValue, int.MaxValue, int.MaxValue, int.MaxValue);
             internal static readonly Version _VersionMax = new Version(int.MaxValue, int.MaxValue);
 
@@ -184,13 +186,53 @@ namespace Celeste.Mod {
                     .Select(Path.GetFileName)
                     .Where(file => file.EndsWith(".zip") && ShouldLoadFile(file))
                     .ToArray();
-                   
+
                 string[] dirs = Directory
                     .GetDirectories(PathMods)
                     .OrderBy(f => f) //Prevent inode loading jank
                     .Select(Path.GetFileName)
                     .Where(file => file != "Cache" && ShouldLoadFile(file))
                     .ToArray();
+
+                // Perform a pre-pass over all mods to allow for configurations before the assemblies are loaded
+                foreach (string file in files) {
+                    if (ParseConfigZip(file) is not { } config)
+                        continue;
+
+                    foreach (var target in config.PreventInlining) {
+                        PreventInlining.Add(target);
+                    }
+                }
+                foreach (string dir in dirs) {
+                    if (ParseConfigDir(dir) is not { } config)
+                        continue;
+
+                    foreach (var target in config.PreventInlining) {
+                        PreventInlining.Add(target);
+                    }
+                }
+
+                foreach (var target in PreventInlining) {
+                    var type =
+                        typeof(Celeste).Assembly.GetType(target.Type, throwOnError: false) ??
+                        typeof(Game).Assembly.GetType(target.Type, throwOnError: false);
+                    if (type == null) {
+                        // Don't warn - the type might be in another assembly
+                        continue;
+                    }
+
+                    foreach (string id in target.Methods) {
+                        var method = type.FindMethodDeep(id);
+                        if (method == null) {
+                            Logger.Warn("loader", $"Failed to find method '{id}' in type '{target.Type}'");
+                            continue;
+                        }
+
+                        if (!HookUtils.TryDisableInlining(method)) {
+                            Logger.Warn("loader", $"Failed to prevent inlining for method '{id}' on type '{target.Type}'");
+                        }
+                    }
+                }
 
                 EverestSplashHandler.SetSplashLoadingModCount(files.Length + dirs.Length);
 
@@ -249,6 +291,56 @@ namespace Celeste.Mod {
                 Logger.LogDetailed(e.GetException());
             }
 
+            private static EverestModuleConfig ParseConfigZip(string archive) {
+                if (!File.Exists(archive)) // Relative path? Let's just make it absolute.
+                    archive = Path.Combine(PathMods, archive);
+                if (!File.Exists(archive)) // It just doesn't exist.
+                    return null;
+
+                using ZipArchive zip = ZipFile.OpenRead(archive);
+
+                var configEntry = zip.GetEntry("config.yaml");
+                if (configEntry == null)
+                    return null;
+
+                using var stream = configEntry.Open();
+                using var reader = new StreamReader(stream);
+
+                try {
+                    if (!reader.EndOfStream) {
+                        return YamlHelper.Deserializer.Deserialize<EverestModuleConfig>(reader);
+                    }
+                } catch (Exception e) {
+                    Logger.Warn("loader", $"Failed parsing {configEntry.FullName} in {archive}: {e}");
+                    FilesWithMetadataLoadFailures.Add(archive);
+                }
+
+                return null;
+            }
+            private static EverestModuleConfig ParseConfigDir(string dir) {
+                if (!Directory.Exists(dir)) // Relative path?
+                    dir = Path.Combine(PathMods, dir);
+                if (!Directory.Exists(dir)) // It just doesn't exist.
+                    return null;
+
+                string configPath = Path.Combine(dir, "config.yaml");
+                if (!File.Exists(configPath))
+                    return null;
+
+                using var reader = new StreamReader(configPath);
+
+                try {
+                    if (!reader.EndOfStream) {
+                        return YamlHelper.Deserializer.Deserialize<EverestModuleConfig>(reader);
+                    }
+                } catch (Exception e) {
+                    Logger.Warn("loader", $"Failed parsing config.yaml in {dir}: {e}");
+                    FilesWithMetadataLoadFailures.Add(dir);
+                }
+
+                return null;
+            }
+
             /// <summary>
             /// Load a mod from a .zip archive at runtime.
             /// </summary>
@@ -294,7 +386,7 @@ namespace Celeste.Mod {
                             metaParsed = true;
                             continue;
                         }
-                        
+
                         if (entry.FullName == ".everestignore") {
                             List<string> lines = new List<string>();
                             using (Stream stream = entry.Open())
@@ -562,6 +654,26 @@ namespace Celeste.Mod {
             }
 
             internal static void ProcessAssembly(EverestModuleMetadata meta, Assembly asm, Type[] types) {
+                foreach (var target in PreventInlining) {
+                    var type = asm.GetType(target.Type, throwOnError: false);
+                    if (type == null) {
+                        // Don't warn - the type might be in another assembly
+                        continue;
+                    }
+
+                    foreach (string id in target.Methods) {
+                        var method = type.FindMethodDeep(id);
+                        if (method == null) {
+                            Logger.Warn("loader", $"Failed to find method '{id}' in type '{target.Type}'");
+                            continue;
+                        }
+
+                        if (!HookUtils.TryDisableInlining(method)) {
+                            Logger.Warn("loader", $"Failed to prevent inlining for method '{id}' on type '{target.Type}'");
+                        }
+                    }
+                }
+
                 LuaLoader.Precache(asm);
 
                 bool newStrawberriesRegistered = false;
@@ -604,7 +716,7 @@ namespace Celeste.Mod {
                                         entity.SourceData = entityData;
                                         entity.SourceId = entityId;
                                     }
-                                    
+
                                     return entity;
                                 };
                                 goto RegisterEntityLoader;
@@ -617,7 +729,7 @@ namespace Celeste.Mod {
                                     var entity = (patch_Entity) ctor.Invoke(new object[] { entityData, offset, entityId });
                                     entity.SourceData = entityData;
                                     entity.SourceId = entityId;
-                                    
+
                                     return entity;
                                 };
                                 goto RegisterEntityLoader;
@@ -629,7 +741,7 @@ namespace Celeste.Mod {
                                     var entity = (patch_Entity)ctor.Invoke(new object[] { entityData, offset });
                                     entity.SourceData = entityData;
                                     entity.SourceId = ((patch_Level)level).CreateEntityId(levelData, entityData);
-                                    
+
                                     return entity;
                                 };
                                 goto RegisterEntityLoader;
@@ -668,7 +780,7 @@ namespace Celeste.Mod {
                             if (ctor != null) {
                                 EntityRegistry.RegisterSidToTypeConnection(id, ctor.DeclaringType);
                             }
-                            
+
                             patch_Level.EntityLoaders[id] = loader;
                         }
                     }

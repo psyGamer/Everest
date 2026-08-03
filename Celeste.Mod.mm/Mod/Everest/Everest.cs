@@ -305,7 +305,7 @@ namespace Celeste.Mod {
                 else if (arg == "--use-scancodes") {
                     Environment.SetEnvironmentVariable("FNA_KEYBOARD_USE_SCANCODES", "1");
                 }
-                
+
                 else if (arg == "--no-game-checksum")
                     Relinker.SkipGameChecksum = true;
             }
